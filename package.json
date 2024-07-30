@@ -3,6 +3,7 @@
   "version": "0.1.2",
   "description": "CoPa: Copy File Sources For Prompting",
   "type": "commonjs",
+  "main": "./dist/copa.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/copa.js"
@@ -25,5 +26,7 @@
     "simple-git": "^3.25.0",
     "ts-node": "^10.9.2"
   },
-  "bin": "./dist/copa.js"
+  "bin": {
+    "copa": "dist/copa.js"
+  }
 }
