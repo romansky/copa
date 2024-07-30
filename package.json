@@ -1,0 +1,27 @@
+{
+  "name": "copa",
+  "version": "0.0.1",
+  "description": "CoPa: Copy File Sources For Prompting",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/copa.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@dqbd/tiktoken": "^1.0.15",
+    "@types/jsdom": "^21.1.7",
+    "axios": "^1.7.2",
+    "clipboardy": "^4.0.0",
+    "commander": "^12.1.0",
+    "dom-to-semantic-markdown": "1.1.1",
+    "glob": "^11.0.0",
+    "jsdom": "^24.1.1",
+    "simple-git": "^3.25.0",
+    "ts-node": "^10.9.2"
+  },
+  "bin": "./dist/copa.js"
+}
