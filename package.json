@@ -1,6 +1,6 @@
 {
   "name": "copa",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "CoPa: Copy File Sources For Prompting",
   "type": "commonjs",
   "scripts": {
