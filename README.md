@@ -35,7 +35,9 @@ You can use the tool directly with `npx` or install it globally.
 ### Using `npx`
 
 ```sh
-npx copa@latest <directory> [options]
+npx copa@latest .
+#> 6 files from . have been copied to the clipboard.
+#> Total tokens: 2674
 ```
 
 ### Global Installation
@@ -90,8 +92,6 @@ ignore: jpg,png,gif
 
 ```sh
 copa .
-#> 6 files from . have been copied to the clipboard.
-#> Total tokens: 2674
 ```
 
 2. Copy files from a specific directory, excluding certain file types:
