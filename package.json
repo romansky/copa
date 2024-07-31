@@ -4,9 +4,7 @@
   "description": "CoPa: Copy File Sources For Prompting",
   "type": "commonjs",
   "main": "./dist/copa.js",
-  "bin": {
-    "copa": "./dist/copa.js"
-  },
+  "bin": "./dist/copa.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/copa.js"
@@ -23,7 +21,7 @@
     "axios": "^1.7.2",
     "clipboardy": "^4.0.0",
     "commander": "^12.1.0",
-    "dom-to-semantic-markdown": "1.1.1",
+    "dom-to-semantic-markdown": "1.1.2",
     "glob": "^11.0.0",
     "jsdom": "^24.1.1",
     "simple-git": "^3.25.0",

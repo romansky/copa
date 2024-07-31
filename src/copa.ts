@@ -81,13 +81,14 @@ async function copyFilesToClipboard(directory: string, options: Options): Promis
 
             if (excludePatterns.length > 0) {
                 files = files.filter(file => !excludePatterns.some(pattern =>
-                    glob.hasMagic(pattern)
-                        ? glob.sync(pattern, {cwd: directory}).includes(file)
-                        : !file.endsWith(pattern)));
+                    file.endsWith(pattern) ||
+                        glob.hasMagic(pattern)
+                            ? glob.sync(pattern, {cwd: directory}).includes(file)
+                            : false));
             }
         } else {
             const globPattern = path.join(directory, '**/*');
-            files = await glob(globPattern, { nodir: true, ignore: excludePatterns });
+            files = await glob(globPattern, {nodir: true, ignore: excludePatterns});
         }
     } catch (error) {
         console.error('Error listing files:', error);
@@ -132,7 +133,7 @@ program
         if (options.file) {
             readSingleFile(options.file);
         } else if (directory) {
-        copyFilesToClipboard(directory, options);
+            copyFilesToClipboard(directory, options);
         } else {
             console.error('Error: Please provide either a directory or use the --file option.');
             process.exit(1);
