@@ -1,6 +1,6 @@
 {
   "name": "copa",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "CoPa: Copy File Sources For Prompting",
   "type": "commonjs",
   "main": "./dist/copa.js",
