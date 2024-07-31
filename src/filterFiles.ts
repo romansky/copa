@@ -1,6 +1,6 @@
-import { Options } from "./options";
-import { simpleGit } from "simple-git";
-import { glob } from "glob";
+import {Options} from "./options";
+import {simpleGit} from "simple-git";
+import {glob} from "glob";
 import path from "path";
 
 const printDebug = false;
@@ -31,7 +31,7 @@ export async function filterFiles(options: Options, directory: string, globalExc
         } else {
             debug('Using glob to list files');
             const globPattern = path.join(directory, '**/*');
-            allFiles = await glob(globPattern, { dot: true, nodir: true });
+            allFiles = await glob(globPattern, {dot: true, nodir: true});
         }
 
         // Convert to relative paths
@@ -43,8 +43,11 @@ export async function filterFiles(options: Options, directory: string, globalExc
         const filteredFiles = allFiles.filter(file => {
             return !excludePatterns.some(pattern => {
                 if (glob.hasMagic(pattern)) {
-                    return glob.sync(pattern, { cwd: directory }).includes(file);
+                    const matchers = glob.sync(pattern, {cwd: directory})
+                    debug(`Magic pattern matching [${pattern}] [${file}] match=[${glob.sync(pattern, {cwd: directory}).includes(file)}] matchers=[${matchers.join(',')}]`)
+                    return matchers.includes(file) || file.split(path.sep).some(_ => matchers.includes(_));
                 } else {
+                    debug(`Normal pattern matching [${pattern}] [${file}] match=[${file.endsWith(pattern) || file.split(path.sep).includes(pattern)}]`)
                     return file.endsWith(pattern) || file.split(path.sep).includes(pattern);
                 }
             });
