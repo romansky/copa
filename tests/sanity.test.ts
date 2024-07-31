@@ -1,57 +1,93 @@
 import { filterFiles } from '../src/filterFiles';
+import * as fs from 'fs/promises';
 import * as path from 'path';
-
-const testDir = path.join(__dirname, 'test_files');
+import * as os from 'os';
 
 describe('CoPa Functionality', () => {
+    let testDir: string;
+
+    beforeEach(async () => {
+        testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copa-test-'));
+        console.debug("created test directory :" + testDir);
+        await fs.mkdir(path.join(testDir, 'subdir'));
+        await fs.writeFile(path.join(testDir, 'file1.js'), 'console.log("Hello");');
+        await fs.writeFile(path.join(testDir, 'file2.md'), '# Markdown');
+        await fs.writeFile(path.join(testDir, 'file3.yml'), 'key: value');
+        await fs.writeFile(path.join(testDir, 'subdir', 'file4.js'), 'const x = 42;');
+        await fs.writeFile(path.join(testDir, 'subdir', 'file5.md'), '## Subheading');
+        await fs.writeFile(path.join(testDir, 'subdir', 'file6.yml'), 'nested: true');
+    });
+
+    afterEach(async () => {
+        await fs.rm(testDir, { recursive: true, force: true });
+    });
+
     describe('filterFiles', () => {
         test('includes all files when no exclusions', async () => {
             const files = await filterFiles({}, testDir);
-            expect(files.length).toBe(9); // Assuming there are 9 files in the test_files directory
-            expect(files).toEqual(expect.arrayContaining([
-                expect.stringMatching(/file_1\.js$/),
-                expect.stringMatching(/file_1\.md$/),
-                expect.stringMatching(/file_1\.yml$/),
-                expect.stringMatching(/file_2\.js$/),
-                expect.stringMatching(/file_2\.md$/),
-                expect.stringMatching(/file_2\.yml$/),
-                expect.stringMatching(/file_3\.js$/),
-                expect.stringMatching(/file_3\.md$/),
-                expect.stringMatching(/file_3\.yml$/),
-            ]));
+            expect(files.length).toBe(6);
+            expect(files.sort()).toEqual([
+                'file1.js',
+                'file2.md',
+                'file3.yml',
+                path.join('subdir', 'file4.js'),
+                path.join('subdir', 'file5.md'),
+                path.join('subdir', 'file6.yml')
+            ].sort());
         });
 
         test('excludes files based on command line options', async () => {
             const files = await filterFiles({ exclude: 'js,md' }, testDir);
-            expect(files.length).toBe(3);
-            expect(files).toEqual(expect.arrayContaining([
-                expect.stringMatching(/\.yml$/),
-            ]));
-            expect(files).not.toEqual(expect.arrayContaining([
-                expect.stringMatching(/\.js$/),
-                expect.stringMatching(/\.md$/),
-            ]));
+            expect(files.length).toBe(2);
+            expect(files.sort()).toEqual([
+                'file3.yml',
+                path.join('subdir', 'file6.yml')
+            ].sort());
         });
 
-        test('excludes files based on command line options', async () => {
+        test('excludes files based on single extension', async () => {
             const files = await filterFiles({ exclude: 'yml' }, testDir);
-            expect(files.length).toBe(6);
-            expect(files).toEqual(expect.arrayContaining([
-                expect.stringMatching(/\.js$/),
-                expect.stringMatching(/\.md$/),
-            ]));
-            expect(files).not.toEqual(expect.arrayContaining([
-                expect.stringMatching(/\.yml$/),
-            ]));
+            expect(files.length).toBe(4);
+            expect(files.sort()).toEqual([
+                'file1.js',
+                'file2.md',
+                path.join('subdir', 'file4.js'),
+                path.join('subdir', 'file5.md')
+            ].sort());
         });
 
         test('handles wildcard patterns', async () => {
-            const files = await filterFiles({ exclude: 'file_*.yml' }, testDir);
-            console.log(files);
-            const yamlFiles = files.filter(file => file.endsWith('.yml'));
-            expect(yamlFiles.length).toBe(0);
-            expect(files.length).toBe(6); // Should include all js and md files
+            const files = await filterFiles({ exclude: 'file*.yml' }, testDir);
+            expect(files.length).toBe(5);
+            expect(files.sort()).toEqual([
+                'file1.js',
+                'file2.md',
+                path.join('subdir', 'file4.js'),
+                path.join('subdir', 'file5.md'),
+                path.join('subdir', 'file6.yml')
+            ].sort());
+        });
+
+        test('handles subdirectory wildcard patterns', async () => {
+            const files = await filterFiles({ exclude: 'subdir/*.js' }, testDir);
+            expect(files.length).toBe(5);
+            expect(files.sort()).toEqual([
+                'file1.js',
+                'file2.md',
+                'file3.yml',
+                path.join('subdir', 'file5.md'),
+                path.join('subdir', 'file6.yml')
+            ].sort());
+        });
+
+        test('excludes entire directories', async () => {
+            const files = await filterFiles({ exclude: 'subdir' }, testDir);
+            expect(files.length).toBe(3);
+            expect(files.sort()).toEqual([
+                'file1.js',
+                'file2.md',
+                'file3.yml'
+            ].sort());
         });
     });
-
 });

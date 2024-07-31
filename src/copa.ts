@@ -19,19 +19,25 @@ function countTokens(input: string): number {
     }
 }
 
-async function readSingleFile(filePath: string): Promise<void> {
+async function readMultipleFiles(filePaths: string[]): Promise<void> {
     const clipboardy = await import('clipboardy');
 
     try {
-        const fileContent = await fs.readFile(filePath, 'utf-8');
-        const fileSection = `===== ${filePath} =====\n${fileContent}\n\n`;
-        const totalTokens = countTokens(fileSection);
+        let content = '';
+        let totalTokens = 0;
 
-        await clipboardy.default.write(fileSection);
-        console.log(`File ${filePath} has been copied to the clipboard.`);
+        for (const filePath of filePaths) {
+            const fileContent = await fs.readFile(filePath, 'utf-8');
+            const fileSection = `===== ${filePath} =====\n${fileContent}\n\n`;
+            content += fileSection;
+            totalTokens += countTokens(fileSection);
+        }
+
+        await clipboardy.default.write(content);
+        console.log(`${filePaths.length} files have been copied to the clipboard.`);
         console.log(`Total tokens: ${totalTokens}`);
     } catch (error) {
-        console.error(`Error reading file ${filePath}:`, error);
+        console.error(`Error reading files:`, error);
         process.exit(1);
     }
 }
@@ -75,10 +81,10 @@ program
     .argument('[directory]', 'Directory to copy files from')
     .option('-ex, --exclude <extensions>', 'Comma-separated list of file extensions to exclude (in addition to global config)')
     .option('-v, --verbose', 'Display the list of copied files')
-    .option('-f, --file <filePath>', 'Path to a single file to copy')
+    .option('-f, --file <filePath>', 'Path to a single file to copy', (value, previous: string[]) => previous.concat([value]), [])
     .action((directory: string | undefined, options: Options) => {
-        if (options.file) {
-            readSingleFile(options.file);
+        if (options.file && options.file.length > 0) {
+            readMultipleFiles(options.file);
         } else if (directory) {
             copyFilesToClipboard(directory, options);
         } else {
