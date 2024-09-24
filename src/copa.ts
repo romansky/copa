@@ -6,6 +6,7 @@ import {encoding_for_model} from '@dqbd/tiktoken';
 import {Options} from "./options";
 import {readGlobalConfig} from "./readGlobalConfig";
 import {filterFiles} from "./filterFiles";
+import {processPromptFile} from './promptProcessor';
 
 function countTokens(input: string): number {
     const tokenize = encoding_for_model('gpt-4');
@@ -66,13 +67,41 @@ program
     .option('-ex, --exclude <extensions>', 'Comma-separated list of file extensions to exclude (in addition to global config)')
     .option('-v, --verbose', 'Display the list of copied files')
     .option('-f, --file <filePath>', 'Path to a single file to copy', (value, previous: string[]) => previous.concat([value]), [])
-    .action((directory: string | undefined, options: Options) => {
-        if (options.file && options.file.length > 0) {
-            copyFilesToClipboard({filePaths: options.file}, options);
+    .option('-r, --read <templateFilePath>', 'Path to a template file to process')
+    .action(async (directory: string | undefined, options: Options) => {
+        if (options.read) {
+            try {
+                const {
+                    content,
+                    warnings,
+                    includedFiles,
+                    totalTokens
+                } = await processPromptFile(options.read);
+                const clipboardy = await import('clipboardy');
+                await clipboardy.default.write(content);
+                console.log('Processed content has been copied to the clipboard.');
+
+                if (warnings.length > 0) {
+                    console.warn('Warnings:', warnings.join('\n'));
+                }
+
+                if (options.verbose && includedFiles && totalTokens) {
+                    console.log('\nIncluded files:');
+                    Object.entries(includedFiles).forEach(([file, tokens]) => {
+                        console.log(`${file} [${tokens}]`);
+                    });
+                    console.log(`\nTotal tokens: ${totalTokens}`);
+                }
+            } catch (error) {
+                console.error('Error processing prompt file:', error);
+                process.exit(1);
+            }
+        } else if (options.file && options.file.length > 0) {
+            await copyFilesToClipboard({filePaths: options.file}, options);
         } else if (directory) {
-            copyFilesToClipboard({directory}, options);
+            await copyFilesToClipboard({directory}, options);
         } else {
-            console.error('Error: Please provide either a directory or use the --file option.');
+            console.error('Error: Please provide either a directory, use the --file option, or use the --read option.');
             process.exit(1);
         }
     });

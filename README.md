@@ -6,12 +6,13 @@
 [![npm version](https://badge.fury.io/js/copa.svg)](https://badge.fury.io/js/copa)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-A command-line tool to copy files from a directory or a single file to the clipboard for prompting, 
-with support for Git repositories, file exclusion, and token counting.
+A command-line tool to copy files from a directory or a single file to the clipboard for prompting,
+with support for Git repositories, file exclusion, token counting, and template processing.
 
 ## Key Features
 
 - Easily copy multiple files or a single file to clipboard in a format suitable for LLM prompts
+- Process template files with file references for structured prompts
 - Ideal for mono-repos with multiple smaller projects
 - Uses a convenient format for LLMs to understand files and their contents
 - Informs you of the token count for the copied content
@@ -26,6 +27,7 @@ CoPa is perfect for quickly sharing code context with LLMs for various tasks:
 - Reporting bugs with full context
 - Requesting README updates
 - Proposing refactoring changes
+- Creating structured prompts with specific file contents
 - Any task requiring code context from multiple files
 
 ## Installation
@@ -66,17 +68,19 @@ After linking the package globally, you can use the `copa` command anywhere on y
 
 ## Usage
 
-The `copa` command copies files from a specified directory to the clipboard. Here are the available options:
+The `copa` command copies files from a specified directory to the clipboard or processes a template file. Here are the available options:
 
 ```
 copa <directory> [options]
 copa --file <filePath>
+copa --read <templateFilePath>
 ```
 
 Options:
 - `-ex, --exclude <extensions>`: Comma-separated list of file extensions to exclude (in addition to global config)
 - `-v, --verbose`: Display the list of copied files
 - `-f, --file <filePath>`: Path to a single file to copy
+- `-r, --read <templateFilePath>`: Path to a template file to process
 
 ### Global Configuration
 
@@ -100,22 +104,10 @@ copa .
 copa /path/to/directory -ex js,ts,json
 ```
 
-3. Copy files and display verbose output:
+5. Process a template file:
 
 ```sh
-copa /path/to/directory -v
-```
-
-4. Copy a single file:
-
-```sh
-copa --file /path/to/file.txt
-```
-
-5. Using with npx:
-
-```sh
-npx copa@latest /path/to/directory
+copa --read /path/to/template.txt
 ```
 
 ## Output Format
@@ -130,6 +122,38 @@ File contents here...
 More file contents...
 ```
 
+## Template File Feature
+
+CoPa now supports processing template files with file references. This allows you to create structured prompts that include specific file contents.
+
+### Template File Format
+
+In your template file, use `{{@filepath}}` to reference files or directories. CoPa will replace these references with the actual file contents.
+
+Example template.txt:
+```
+Here's the main code:
+{{@src/main.js}}
+
+And here's the test file:
+{{@tests/main.test.js}}
+
+Now, let's look at the entire 'utils' directory:
+{{@utils}}
+```
+
+When processed, CoPa will replace each `{{@filepath}}` with the contents of the referenced file or directory, using the standard output format.
+
+### Using Template Files
+
+To process a template file, use the `--read` option:
+
+```sh
+copa --read /path/to/template.txt
+```
+
+This will output the processed content to the console, which you can then copy or pipe to another command.
+
 ## Features
 
 - Automatically detects Git repositories and uses `git ls-files` for file listing
@@ -140,6 +164,8 @@ More file contents...
 - Displays the number of files copied and total token count
 - Verbose mode to list all copied files
 - Single file copy support
+- Template file processing for structured prompts
+
 
 ## Output
 
