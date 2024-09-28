@@ -18,7 +18,7 @@ It offers two main functionalities:
 - Process template files with dynamic file references
 - Copy an entire folder or a single file to clipboard in a LLM friendly format
 - Support for Git repositories and respect for `.gitignore`
-- Automatic token counting
+- Built-in token counting
 - Easy-to-use CLI utility
 
 ## Usage
@@ -30,7 +30,7 @@ Use CoPa directly with `npx` (recommended) or install it globally.
 Process a template file:
 
 ```sh
-npx copa@latest t prompt.txt
+npx copa t prompt.txt
 ```
 
 ### Global Installation (Alternative)
@@ -51,24 +51,24 @@ copa t prompt.txt
 
 Create a template file (e.g., `prompt.txt`) using `{{@filepath}}` to reference files or directories:
 
-```
+````
 Analyze this code:
-\`\`\`
+```
 {{@src/main.js}}
-\`\`\`
+```
 
 And its test:
-\`\`\`
+```
 {{@tests/main.test.js}}
-\`\`\`
+```
 
 Review the entire 'utils' directory:
-\`\`\`
+```
 {{@utils}}
-\`\`\`
+```
 
 [new feature description / instructions for the LLM]
-```
+````
 
 Process the template and copy to clipboard:
 
@@ -93,27 +93,30 @@ copa t prompt.txt
 
 CoPa uses a format that's easy for LLMs to understand:
 
+````
+Analyze this code:
 ```
-\`\`\`
-===== filename.ext =====
+===== src/main.js =====
 File contents here...
-
-===== another_file.ext =====
-More file contents...
-\`\`\`
 ```
+
+And its test:
+```
+===== tests/main.test.js =====
+...
+````
 
 ## Use Cases
 
-- Code review prompts
-- Bug report generation
-- Documentation updates
+- Control over what's included in a prompt
+- Repeatable complex prompts with complex file imports
+- Sharing project wide prompt templates
 - Any task requiring code context from multiple files
 
 ## Tips
 
 1. Use relative paths in templates for better portability
-2. Monitor token usage to fit LLM context windows
+2. Create a "prompts" directory in project root
 3. Create a library of templates for common tasks
 
 ## Global Configuration
