@@ -1,6 +1,6 @@
 <h1 align="center">
     <img width="100" height="100" src="copa.svg" alt="CoPa Logo"><br>
-    CoPa: LLM Prompting Templates
+    CoPa: LLM Prompting Templating
 
 </h1>
 
