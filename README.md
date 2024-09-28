@@ -1,114 +1,88 @@
 <h1 align="center">
     <img width="100" height="100" src="copa.svg" alt="CoPa Logo"><br>
-    CoPa: Copy File Sources For Easy Prompting
+    CoPa: Copy File Sources For Prompting and LLM Template Processing
+    CoPa: LLM Prompting Templates
+
 </h1>
 
 [![npm version](https://badge.fury.io/js/copa.svg)](https://badge.fury.io/js/copa)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-A command-line tool to copy files from a directory or a single file to the clipboard for prompting,
-with support for Git repositories, file exclusion, token counting, and template processing.
+CoPa is a simple CLI tool for creating structured prompts for Large Language Models (LLMs) using file references. 
+It offers two main functionalities:
+
+1. Processing LLM prompt templates with file references
+2. Copying file contents in an LLM-friendly format
 
 ## Key Features
 
-- Easily copy multiple files or a single file to clipboard in a format suitable for LLM prompts
-- Process template files with file references for structured prompts
-- Ideal for mono-repos with multiple smaller projects
-- Uses a convenient format for LLMs to understand files and their contents
-- Informs you of the token count for the copied content
-- Supports Git repositories and respects `.gitignore`
-- Allows global and command-line exclude patterns
-
-## Use Cases
-
-CoPa is perfect for quickly sharing code context with LLMs for various tasks:
-
-- Describing feature requests
-- Reporting bugs with full context
-- Requesting README updates
-- Proposing refactoring changes
-- Creating structured prompts with specific file contents
-- Any task requiring code context from multiple files
-
-## Installation
-
-You can use the tool directly with `npx` or install it globally.
-
-### Using `npx`
-
-```sh
-npx copa@latest .
-#> 6 files from . have been copied to the clipboard.
-#> Total tokens: 2674
-```
-
-### Global Installation
-
-1. Clone the repository:
-
-```sh
-git clone https://github.com/romansky/copa.git
-cd copa
-```
-
-2. Install dependencies and build:
-
-```sh
-npm install
-npm run build
-```
-
-3. Link the package globally:
-
-```sh
-npm link
-```
-
-After linking the package globally, you can use the `copa` command anywhere on your system.
+- Process template files with dynamic file references
+- Copy an entire folder or a single file to clipboard in a LLM friendly format
+- Support for Git repositories and respect for `.gitignore`
+- Automatic token counting
+- Easy-to-use CLI utility
 
 ## Usage
 
-The `copa` command copies files from a specified directory to the clipboard or processes a template file. Here are the available options:
+Use CoPa directly with `npx` (recommended) or install it globally.
 
-```
-copa <directory> [options]
-copa --file <filePath>
-copa --read <templateFilePath>
-```
+### Using `npx` (Recommended)
 
-Options:
-- `-ex, --exclude <extensions>`: Comma-separated list of file extensions to exclude (in addition to global config)
-- `-v, --verbose`: Display the list of copied files
-- `-f, --file <filePath>`: Path to a single file to copy
-- `-r, --read <templateFilePath>`: Path to a template file to process
-
-### Global Configuration
-
-Create a global configuration file at `~/.copa` to specify default exclude patterns:
-
-```
-ignore: jpg,png,gif
-```
-
-### Examples
-
-1. Copy all files from the current directory:
+Process a template file:
 
 ```sh
-copa .
+npx copa@latest t prompt.txt
 ```
 
-2. Copy files from a specific directory, excluding certain file types:
+### Global Installation (Alternative)
+
+Install CoPa globally:
 
 ```sh
-copa /path/to/directory -ex js,ts,json
+npm install -g copa
 ```
 
-5. Process a template file:
+Then use it as:
 
 ```sh
-copa --read /path/to/template.txt
+copa t prompt.txt
 ```
+
+## Template Syntax
+
+Create a template file (e.g., `prompt.txt`) using `{{@filepath}}` to reference files or directories:
+
+```
+Analyze this code:
+{{@src/main.js}}
+
+And its test:
+{{@tests/main.test.js}}
+
+Review the entire 'utils' directory:
+{{@utils}}
+
+[new feature description / instructions for the LLM]
+```
+
+Process the template and copy to clipboard:
+
+```sh
+copa template prompt.txt
+# or use the short alias
+copa t prompt.txt
+```
+
+## Commands
+
+- `t, template <file>`: Process a template file
+  - Option: `-v, --verbose` (Display detailed file and token information)
+
+- `c, copy [directory]`: Copy files to clipboard (legacy mode)
+  - Options: 
+    - `-ex, --exclude <extensions>` (Exclude file types)
+    - `-v, --verbose` (List copied files)
+    - `-f, --file <filePath>` (Copy a single file)
 
 ## Output Format
 
@@ -122,68 +96,31 @@ File contents here...
 More file contents...
 ```
 
-## Template File Feature
+## Use Cases
 
-CoPa now supports processing template files with file references. This allows you to create structured prompts that include specific file contents.
+- Code review prompts
+- Bug report generation
+- Documentation updates
+- Any task requiring code context from multiple files
 
-### Template File Format
+## Tips
 
-In your template file, use `{{@filepath}}` to reference files or directories. CoPa will replace these references with the actual file contents.
+1. Use relative paths in templates for better portability
+2. Monitor token usage to fit LLM context windows
+3. Create a library of templates for common tasks
 
-Example template.txt:
+## Global Configuration
+
+Create `~/.copa` to set default exclude patterns:
+
 ```
-Here's the main code:
-{{@src/main.js}}
-
-And here's the test file:
-{{@tests/main.test.js}}
-
-Now, let's look at the entire 'utils' directory:
-{{@utils}}
-```
-
-When processed, CoPa will replace each `{{@filepath}}` with the contents of the referenced file or directory, using the standard output format.
-
-### Using Template Files
-
-To process a template file, use the `--read` option:
-
-```sh
-copa --read /path/to/template.txt
+ignore: jpg,png,gif
 ```
 
-This will output the processed content to the console, which you can then copy or pipe to another command.
+## Contributing
 
-## Features
-
-- Automatically detects Git repositories and uses `git ls-files` for file listing
-- Respects `.gitignore`
-- Supports global and command-line exclude patterns
-- Copies file contents to clipboard with file names as separators
-- Counts tokens in the copied content (using GPT-4 tokenizer)
-- Displays the number of files copied and total token count
-- Verbose mode to list all copied files
-- Single file copy support
-- Template file processing for structured prompts
-
-
-## Output
-
-The tool will display:
-- The number of files copied (for directory mode)
-- The total token count of the copied content
-- (In verbose mode) A list of all copied files
-
-## Development
-
-To set up the project for development:
-
-1. Clone the repository
-2. Run `npm install` to install dependencies
-3. Make changes to the TypeScript files in the `src` directory
-4. Run `npm run build` to compile the TypeScript code
-5. Use `npm link` to test the CLI locally
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.

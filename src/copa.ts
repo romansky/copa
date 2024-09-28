@@ -8,6 +8,11 @@ import {readGlobalConfig} from "./readGlobalConfig";
 import {filterFiles} from "./filterFiles";
 import {processPromptFile} from './promptProcessor';
 
+async function copyToClipboard(content: string): Promise<void> {
+    const clipboardy = await import('clipboardy');
+    await clipboardy.default.write(content);
+}
+
 function countTokens(input: string): number {
     const tokenize = encoding_for_model('gpt-4');
     try {
@@ -24,14 +29,11 @@ async function copyFilesToClipboard(source: {
     directory?: string,
     filePaths?: string[]
 }, options: Options): Promise<void> {
-    const clipboardy = await import('clipboardy');
-    const {directory, filePaths} = source;
-
     try {
         const globalExclude = await readGlobalConfig();
-        let files = directory
-            ? await filterFiles(options, directory, globalExclude)
-            : (filePaths ?? []);
+        let files = source.directory
+            ? await filterFiles(options, source.directory, globalExclude)
+            : (source.filePaths ?? []);
         let totalTokens = 0;
         const tokensPerFile: { [_: string]: number } = {};
         let content = '';
@@ -48,8 +50,8 @@ async function copyFilesToClipboard(source: {
             }
         }
 
-        await clipboardy.default.write(content);
-        console.log(`${files.length} files from ${directory ? directory : 'files list'} have been copied to the clipboard.`);
+        await copyToClipboard(content);
+        console.log(`${files.length} files from ${source.directory ? source.directory : 'files list'} have been copied to the clipboard.`);
         console.log(`Total tokens: ${totalTokens}`);
 
         if (options.verbose) {
@@ -57,54 +59,77 @@ async function copyFilesToClipboard(source: {
             files.forEach(file => console.log(`${file} [${tokensPerFile[file]}]`));
         }
     } catch (error) {
-        console.error('Error writing to clipboard:', error);
+        console.error('Error copying files to clipboard:', error);
+        process.exit(1);
+    }
+}
+
+async function handleTemplateCommand(file: string, options: { verbose?: boolean }) {
+    try {
+        const {
+            content,
+            warnings,
+            includedFiles,
+            totalTokens
+        } = await processPromptFile(file);
+
+            await copyToClipboard(content);
+        console.log(`Processed template from ${file} has been copied to the clipboard.`);
+        console.log(`Total tokens: ${totalTokens}`);
+
+        if (warnings.length > 0) {
+            console.warn('Warnings:', warnings.join('\n'));
+        }
+
+        if (options.verbose && includedFiles) {
+            console.log('\nIncluded files:');
+            Object.entries(includedFiles).forEach(([file, tokens]) => {
+                console.log(`${file} [${tokens}]`);
+            });
+        }
+    } catch (error) {
+        console.error('Error processing template file:', error);
+        process.exit(1);
+    }
+}
+
+async function handleCopyCommand(directory: string | undefined, options: Options) {
+    if (options.file && options.file.length > 0) {
+        await copyFilesToClipboard({filePaths: options.file}, options);
+    } else if (directory) {
+        await copyFilesToClipboard({directory}, options);
+    } else {
+        console.error('Error: Please provide either a directory or use the --file option.');
         process.exit(1);
     }
 }
 
 program
-    .argument('[directory]', 'Directory to copy files from')
+    .name('copa')
+    .description('CoPa: Copy File Sources For Prompting and LLM Template Processing')
+    .version('1.0.0');
+
+program
+    .command('template <file>')
+    .alias('t')
+    .description('Process an LLM prompt template file and copy to clipboard')
+    .option('-v, --verbose', 'Display detailed information about processed files and token counts')
+    .action(handleTemplateCommand);
+
+program
+    .command('copy [directory]')
+    .alias('c')
+    .description('Copy files from a directory or a single file to the clipboard (legacy mode)')
     .option('-ex, --exclude <extensions>', 'Comma-separated list of file extensions to exclude (in addition to global config)')
     .option('-v, --verbose', 'Display the list of copied files')
     .option('-f, --file <filePath>', 'Path to a single file to copy', (value, previous: string[]) => previous.concat([value]), [])
-    .option('-r, --read <templateFilePath>', 'Path to a template file to process')
-    .action(async (directory: string | undefined, options: Options) => {
-        if (options.read) {
-            try {
-                const {
-                    content,
-                    warnings,
-                    includedFiles,
-                    totalTokens
-                } = await processPromptFile(options.read);
-                const clipboardy = await import('clipboardy');
-                await clipboardy.default.write(content);
-                console.log('Processed content has been copied to the clipboard.');
+    .action(handleCopyCommand);
 
-                if (warnings.length > 0) {
-                    console.warn('Warnings:', warnings.join('\n'));
-                }
-
-                if (options.verbose && includedFiles && totalTokens) {
-                    console.log('\nIncluded files:');
-                    Object.entries(includedFiles).forEach(([file, tokens]) => {
-                        console.log(`${file} [${tokens}]`);
-                    });
-                    console.log(`\nTotal tokens: ${totalTokens}`);
-                }
-            } catch (error) {
-                console.error('Error processing prompt file:', error);
-                process.exit(1);
-            }
-        } else if (options.file && options.file.length > 0) {
-            await copyFilesToClipboard({filePaths: options.file}, options);
-        } else if (directory) {
-            await copyFilesToClipboard({directory}, options);
-        } else {
-            console.error('Error: Please provide either a directory, use the --file option, or use the --read option.');
-            process.exit(1);
-        }
+// Default command (no arguments)
+program
+    .action(() => {
+        console.log('Please specify a command: "template" (or "t") or "copy" (or "c")');
+        program.outputHelp();
     });
 
 program.parse(process.argv);
-
