@@ -53,13 +53,19 @@ Create a template file (e.g., `prompt.txt`) using `{{@filepath}}` to reference f
 
 ```
 Analyze this code:
+\`\`\`
 {{@src/main.js}}
+\`\`\`
 
 And its test:
+\`\`\`
 {{@tests/main.test.js}}
+\`\`\`
 
 Review the entire 'utils' directory:
+\`\`\`
 {{@utils}}
+\`\`\`
 
 [new feature description / instructions for the LLM]
 ```
@@ -88,11 +94,13 @@ copa t prompt.txt
 CoPa uses a format that's easy for LLMs to understand:
 
 ```
+\`\`\`
 ===== filename.ext =====
 File contents here...
 
 ===== another_file.ext =====
 More file contents...
+\`\`\`
 ```
 
 ## Use Cases
