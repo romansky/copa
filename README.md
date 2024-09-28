@@ -1,6 +1,5 @@
 <h1 align="center">
     <img width="100" height="100" src="copa.svg" alt="CoPa Logo"><br>
-    CoPa: Copy File Sources For Prompting and LLM Template Processing
     CoPa: LLM Prompting Templates
 
 </h1>
