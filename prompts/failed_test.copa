@@ -1,0 +1,68 @@
+I'm working on an OSS project
+
+This is the source of it:
+
+```
+{{@../src}}
+```
+
+And tests:
+
+```
+{{@../tests}}
+```
+
+Some tests are failing, can you investigate?
+
+
+
+  ● CoPa Functionality › filterFiles › excludes files based on command line options
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: 6
+
+      39 |         test('excludes files based on command line options', async () => {
+      40 |             const files = await filterFiles({exclude: 'js,md'}, testDir);
+    > 41 |             expect(files.length).toBe(2);
+         |                                  ^
+      42 |             expect(files.sort()).toEqual([
+      43 |                 'file3.yml',
+      44 |                 path.join('subdir', 'file6.yml')
+
+      at Object.<anonymous> (tests/sanity.test.ts:41:34)
+
+  ● CoPa Functionality › filterFiles › excludes files based on single extension
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 4
+    Received: 6
+
+      48 |         test('excludes files based on single extension', async () => {
+      49 |             const files = await filterFiles({exclude: 'yml'}, testDir);
+    > 50 |             expect(files.length).toBe(4);
+         |                                  ^
+      51 |             expect(files.sort()).toEqual([
+      52 |                 'file1.js',
+      53 |                 'file2.md',
+
+      at Object.<anonymous> (tests/sanity.test.ts:50:34)
+
+  ● hidden folders › filterFiles › excludes hidden folder and its files with glob pattern
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 6
+    Received: 7
+
+      131 |         test('excludes hidden folder and its files with glob pattern', async () => {
+      132 |             const files = await filterFiles({ exclude: '.*' }, testDir);
+    > 133 |             expect(files.length).toBe(6);
+          |                                  ^
+      134 |             expect(files.sort()).toEqual([
+      135 |                 'file1.js',
+      136 |                 'file2.md',
+
+      at Object.<anonymous> (tests/sanity.test.ts:133:34)

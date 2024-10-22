@@ -1432,6 +1432,7 @@ __metadata:
     commander: "npm:^12.1.0"
     glob: "npm:^11.0.0"
     jest: "npm:^29.7.0"
+    minimatch: "npm:^10.0.1"
     simple-git: "npm:^3.25.0"
     ts-jest: "npm:^29.2.4"
     ts-node: "npm:^10.9.2"
@@ -2879,7 +2880,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minimatch@npm:^10.0.0":
+"minimatch@npm:^10.0.0, minimatch@npm:^10.0.1":
   version: 10.0.1
   resolution: "minimatch@npm:10.0.1"
   dependencies:

@@ -26,6 +26,7 @@
     "clipboardy": "^4.0.0",
     "commander": "^12.1.0",
     "glob": "^11.0.0",
+    "minimatch": "^10.0.1",
     "simple-git": "^3.25.0"
   }
 }

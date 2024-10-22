@@ -38,7 +38,7 @@ async function copyFilesToClipboard(source: {
         const tokensPerFile: { [_: string]: number } = {};
         let content = '';
 
-        for (const file of files) {
+        for (const file of files ?? []) {
             try {
                 const fileContent = await fs.readFile(file, 'utf-8');
                 const fileSection = `===== ${file} =====\n${fileContent}\n\n`;
@@ -51,12 +51,12 @@ async function copyFilesToClipboard(source: {
         }
 
         await copyToClipboard(content);
-        console.log(`${files.length} files from ${source.directory ? source.directory : 'files list'} have been copied to the clipboard.`);
+        console.log(`${files?.length} files from ${source.directory ? source.directory : 'files list'} have been copied to the clipboard.`);
         console.log(`Total tokens: ${totalTokens}`);
 
         if (options.verbose) {
             console.log('Copied files:');
-            files.forEach(file => console.log(`${file} [${tokensPerFile[file]}]`));
+            files?.forEach(file => console.log(`${file} [${tokensPerFile[file]}]`));
         }
     } catch (error) {
         console.error('Error copying files to clipboard:', error);
@@ -66,19 +66,20 @@ async function copyFilesToClipboard(source: {
 
 async function handleTemplateCommand(file: string, options: { verbose?: boolean }) {
     try {
+        const globalExclude = await readGlobalConfig();
         const {
             content,
             warnings,
             includedFiles,
             totalTokens
-        } = await processPromptFile(file);
+        } = await processPromptFile(file, globalExclude);
 
-            await copyToClipboard(content);
+        await copyToClipboard(content);
         console.log(`Processed template from ${file} has been copied to the clipboard.`);
         console.log(`Total tokens: ${totalTokens}`);
 
         if (warnings.length > 0) {
-            console.warn('Warnings:', warnings.join('\n'));
+            console.warn(warnings.join('\n'));
         }
 
         if (options.verbose && includedFiles) {

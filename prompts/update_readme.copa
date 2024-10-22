@@ -1,0 +1,19 @@
+I'm working on an OSS project
+
+````
+{{@../README.md}}
+````
+
+This is the source code:
+
+```
+{{@../src}}
+```
+
+And tests:
+
+```
+{{@../tests}}
+```
+
+Can you help me update the README to be inline with the latest code and the examples seen in tests?

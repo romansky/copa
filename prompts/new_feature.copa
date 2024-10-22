@@ -1,0 +1,19 @@
+I'm working on an OSS project
+
+```
+{{@../README.md}}
+```
+
+This is the source of it:
+
+```
+{{@../src}}
+```
+
+And tests
+
+```
+{{@../tests}}
+```
+
+<<feature description>>

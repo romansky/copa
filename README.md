@@ -20,6 +20,7 @@ It offers two main functionalities:
 - Support for Git repositories and respect for `.gitignore`
 - Built-in token counting
 - Easy-to-use CLI utility
+- Inline ignore patterns for fine-grained control over included files
 
 ## Usage
 
@@ -67,6 +68,16 @@ Review the entire 'utils' directory:
 {{@utils}}
 ```
 
+Review the 'src' directory, excluding .test.js files:
+```
+{{@src:-*.test.js}}
+```
+
+Review all files in the current directory, excluding markdown files and the 'subdir' directory:
+```
+{{@.:-*.md,-**/subdir/**}}
+```
+
 [new feature description / instructions for the LLM]
 ````
 
@@ -77,6 +88,26 @@ copa template prompt.txt
 # or use the short alias
 copa t prompt.txt
 ```
+
+## Inline Ignore Patterns
+
+You can use inline ignore patterns to exclude specific files or patterns within a directory reference:
+
+```
+{{@directory:-pattern1,-pattern2,...}}
+```
+
+Examples:
+- `{{@src:-*.test.js}}` includes all files in the 'src' directory except for files ending with '.test.js'
+- `{{@.:-*.md,-**/subdir/**}}` includes all files in the current directory, excluding markdown files and the 'subdir' directory
+- `{{@.:-**/*dir/**,-*.y*}}` excludes all files in any directory ending with 'dir' and all files with extensions starting with 'y'
+
+Ignore patterns support:
+- File extensions: `-*.js`
+- Specific files: `-file.txt`
+- Directories: `-**/dirname/**`
+- Glob patterns: `-**/*.test.js`
+- Hidden files and directories: `-.*`
 
 ## Commands
 
@@ -118,6 +149,7 @@ And its test:
 1. Use relative paths in templates for better portability
 2. Create a "prompts" directory in project root
 3. Create a library of templates for common tasks
+4. Use inline ignore patterns for fine-grained control over included files
 
 ## Global Configuration
 
