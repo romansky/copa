@@ -31,7 +31,7 @@ Use CoPa directly with `npx` (recommended) or install it globally.
 Process a template file:
 
 ```sh
-npx copa t prompt.txt
+npx copa t prompt.copa
 ```
 
 ### Global Installation (Alternative)
@@ -45,12 +45,12 @@ npm install -g copa
 Then use it as:
 
 ```sh
-copa t prompt.txt
+copa t prompt.copa
 ```
 
 ## Template Syntax
 
-Create a template file (e.g., `prompt.txt`) using `{{@filepath}}` to reference files or directories:
+Create a template file (e.g., `prompt.copa`) using `{{@filepath}}` to reference files or directories:
 
 ````
 Analyze this code:
@@ -84,9 +84,9 @@ Review all files in the current directory, excluding markdown files and the 'sub
 Process the template and copy to clipboard:
 
 ```sh
-copa template prompt.txt
+copa template prompt.copa
 # or use the short alias
-copa t prompt.txt
+copa t prompt.copa
 ```
 
 ## Inline Ignore Patterns

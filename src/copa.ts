@@ -7,6 +7,7 @@ import {Options} from "./options";
 import {readGlobalConfig} from "./readGlobalConfig";
 import {filterFiles} from "./filterFiles";
 import {processPromptFile} from './promptProcessor';
+import path from "path";
 
 async function copyToClipboard(content: string): Promise<void> {
     const clipboardy = await import('clipboardy');
@@ -96,14 +97,35 @@ async function handleTemplateCommand(file: string, options: { verbose?: boolean 
 
 async function handleCopyCommand(directory: string | undefined, options: Options) {
     if (options.file && options.file.length > 0) {
-        await copyFilesToClipboard({filePaths: options.file}, options);
+        // Use the provided file paths
+        await copyFilesToClipboard({ filePaths: options.file }, options);
     } else if (directory) {
-        await copyFilesToClipboard({directory}, options);
+        const fullPath = path.resolve(directory);
+
+        // Check if the provided directory is actually a file
+        try {
+            const stats = await fs.stat(fullPath);
+            if (stats.isFile()) {
+                // Treat it as a single file, not a directory
+                await copyFilesToClipboard({ filePaths: [fullPath] }, options);
+            } else if (stats.isDirectory()) {
+                // It's a directory
+                console.log(`Copying files from ${path.normalize(directory)}`);
+                await copyFilesToClipboard({ directory: fullPath }, options);
+            } else {
+                console.error('Error: Provided path is neither a file nor a directory.');
+                process.exit(1);
+            }
+        } catch (error) {
+            console.error('Error: Unable to resolve the provided path.', error);
+            process.exit(1);
+        }
     } else {
         console.error('Error: Please provide either a directory or use the --file option.');
         process.exit(1);
     }
 }
+
 
 program
     .name('copa')

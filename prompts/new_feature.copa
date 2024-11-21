@@ -7,7 +7,7 @@ I'm working on an OSS project
 This is the source of it:
 
 ```
-{{@../src}}
+{{@../src:-.ts}}
 ```
 
 And tests
