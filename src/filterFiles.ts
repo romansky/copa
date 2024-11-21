@@ -60,7 +60,10 @@ export async function filterFiles(options: Options, pathToProcess: string, globa
                 } else if (pattern.includes('*') || pattern.includes('/')) {
                     return minimatch(file, pattern, {dot: true, matchBase: true});
                 } else {
-                    return pattern.endsWith(path.extname(file)) || file.startsWith(pattern);
+                    // Check if it's an exact file match or exact extension match
+                    const fileName = path.basename(file);
+                    return fileName === pattern ||
+                        (pattern.startsWith('.') && pattern === path.extname(file));
                 }
             });
             if (isExcluded) {

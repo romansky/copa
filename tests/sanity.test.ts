@@ -143,5 +143,14 @@ describe('hidden folders', () => {
                 path.join('subdir', 'file6.yml')
             ].sort());
         });
+        test('excludes specific file without affecting other files with same extension', async () => {
+            await fs.writeFile(path.join(testDir, 'specific.ts'), 'specific content');
+            await fs.writeFile(path.join(testDir, 'other.ts'), 'other content');
+
+            const files = (await filterFiles({exclude: 'specific.ts'}, testDir))!.map(cleanPath);
+            expect(files).not.toContain('specific.ts');
+            expect(files).toContain('other.ts');
+        });
+
     });
 })
