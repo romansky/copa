@@ -73,7 +73,7 @@ async function handleTemplateCommand(file: string, options: { verbose?: boolean 
             warnings,
             includedFiles,
             totalTokens
-        } = await processPromptFile(file, globalExclude);
+        } = await processPromptFile(path.resolve(file), globalExclude);
 
         await copyToClipboard(content);
         console.log(`Processed template from ${file} has been copied to the clipboard.`);
