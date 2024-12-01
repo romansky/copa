@@ -8,7 +8,8 @@
     "skipLibCheck": true,
     "outDir": "./dist",
     "resolveJsonModule": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "preserveConstEnums": true
   },
   "include": [
     "src/**/*"
