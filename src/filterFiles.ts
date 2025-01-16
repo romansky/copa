@@ -41,7 +41,7 @@ export async function filterFiles(options: Options, pathToProcess: string, globa
                 const gitFiles = await git.raw(['ls-files', '-co', '--exclude-standard', pathToProcess]);
                 allFiles = gitFiles.split('\n').filter(Boolean);
             } else {
-                const globPattern = path.join(pathToProcess, '**/*');
+                const globPattern = path.join(pathToProcess, '**', '*').replace(/\\/g, '/');
                 allFiles = await glob(globPattern, {dot: true, nodir: true});
             }
         } else {
@@ -50,7 +50,7 @@ export async function filterFiles(options: Options, pathToProcess: string, globa
 
 
         allFiles = allFiles.map(file => {
-            return path.resolve(pathToProcess, file)
+            return path.isAbsolute(file) ? file : path.resolve(pathToProcess, file);
         });
 
         return allFiles.filter(file => {

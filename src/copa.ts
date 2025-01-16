@@ -11,7 +11,9 @@ import path from "path";
 
 async function copyToClipboard(content: string): Promise<void> {
     const clipboardy = await import('clipboardy');
-    await clipboardy.default.write(content);
+    // Ensure content is properly normalized before writing to clipboard
+    const normalizedContent = content.normalize('NFC');
+    await clipboardy.default.write(normalizedContent);
 }
 
 function countTokens(input: string): number {
@@ -41,7 +43,10 @@ async function copyFilesToClipboard(source: {
 
         for (const file of files ?? []) {
             try {
-                const fileContent = await fs.readFile(file, 'utf-8');
+                const fileContent = await fs.readFile(file, {
+                    encoding: 'utf8',
+                    flag: 'r'
+                });
                 const fileSection = `===== ${file} =====\n${fileContent}\n\n`;
                 content += fileSection;
                 tokensPerFile[file] = countTokens(fileSection);
@@ -50,6 +55,9 @@ async function copyFilesToClipboard(source: {
                 console.error(`Error reading file ${file}:`, error);
             }
         }
+
+        // Normalize the content to ensure consistent Unicode representation
+        content = content.normalize('NFC');
 
         await copyToClipboard(content);
         console.log(`${files?.length} files from ${source.directory ? source.directory : 'files list'} have been copied to the clipboard.`);
@@ -98,7 +106,8 @@ async function handleTemplateCommand(file: string, options: { verbose?: boolean 
 async function handleCopyCommand(directory: string | undefined, options: Options) {
     if (options.file && options.file.length > 0) {
         // Use the provided file paths
-        await copyFilesToClipboard({ filePaths: options.file }, options);
+        const normalizedPaths = options.file.map(f => path.normalize(path.resolve(f)));
+        await copyFilesToClipboard({filePaths: normalizedPaths}, options);
     } else if (directory) {
         const fullPath = path.resolve(directory);
 
@@ -107,11 +116,11 @@ async function handleCopyCommand(directory: string | undefined, options: Options
             const stats = await fs.stat(fullPath);
             if (stats.isFile()) {
                 // Treat it as a single file, not a directory
-                await copyFilesToClipboard({ filePaths: [fullPath] }, options);
+                await copyFilesToClipboard({filePaths: [fullPath]}, options);
             } else if (stats.isDirectory()) {
                 // It's a directory
                 console.log(`Copying files from ${path.normalize(directory)}`);
-                await copyFilesToClipboard({ directory: fullPath }, options);
+                await copyFilesToClipboard({directory: fullPath}, options);
             } else {
                 console.error('Error: Provided path is neither a file nor a directory.');
                 process.exit(1);

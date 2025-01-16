@@ -44,9 +44,10 @@ async function processPromptTemplate(template: string, basePath: string, warning
 
     for (const placeholder of placeholders) {
         const {filePath, ignorePatterns} = parsePlaceholder(placeholder.placeholder.slice(3, -2));
-        const fullPath = path.resolve(basePath, filePath);
+        // Normalize and resolve the path
+        const normalizedPath = path.normalize(path.resolve(basePath, filePath));
         try {
-            const result = await processPath(fullPath, ignorePatterns, globalExclude);
+            const result = await processPath(normalizedPath, ignorePatterns, globalExclude);
             processedContent = processedContent.replace(placeholder.placeholder, result.content);
             Object.assign(includedFiles, result.includedFiles);
             totalTokens += result.totalTokens;
@@ -72,11 +73,19 @@ async function processPath(pathToProcess: string, ignorePatterns: string[], glob
     let content = '';
     const includedFiles: { [filePath: string]: number } = {};
     let totalTokens = 0;
-    const pathDir = path.dirname(pathToProcess);
+    // Normalize the base directory path
+    const pathDir = path.normalize(path.dirname(pathToProcess));
+
     for (const file of filteredFiles) {
-        const fullPath = path.resolve(pathDir, file);
-        const fileContent = await fs.readFile(fullPath, 'utf-8');
-        const formattedContent = formatFileContent(path.relative(pathDir, file), fileContent);
+        // Normalize and resolve the full file path
+        const fullPath = path.normalize(path.resolve(pathDir, file));
+        const fileContent = await fs.readFile(fullPath, {
+            encoding: 'utf8',
+            flag: 'r'
+        });
+        // Get the relative path and normalize it
+        const relativePath = path.normalize(path.relative(pathDir, file));
+        const formattedContent = formatFileContent(relativePath, fileContent.normalize('NFC'));
         const tokens = countTokens(formattedContent);
 
         content += formattedContent;
