@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import {filterFiles} from "../src/filterFiles";
+import { describe, beforeEach, afterEach, expect, test } from 'vitest'
 
 describe('Prompt Processor with Ignore Patterns', () => {
     let testDir: string;

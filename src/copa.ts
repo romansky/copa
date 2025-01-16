@@ -8,13 +8,7 @@ import {readGlobalConfig} from "./readGlobalConfig";
 import {filterFiles} from "./filterFiles";
 import {processPromptFile} from './promptProcessor';
 import path from "path";
-
-async function copyToClipboard(content: string): Promise<void> {
-    const clipboardy = await import('clipboardy');
-    // Ensure content is properly normalized before writing to clipboard
-    const normalizedContent = content.normalize('NFC');
-    await clipboardy.default.write(normalizedContent);
-}
+import {copyToClipboard} from "./copyToClipboard";
 
 function countTokens(input: string): number {
     const tokenize = encoding_for_model('gpt-4');

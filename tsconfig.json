@@ -1,11 +1,18 @@
 {
+  "extends": "@tsconfig/node16/tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
+    "declaration": true,
+    "target": "es2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
-    "moduleResolution": "Node16",
     "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "lib": [
+      "ES2022"
+    ],
     "outDir": "./dist",
     "resolveJsonModule": true,
     "sourceMap": true,
