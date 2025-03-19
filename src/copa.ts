@@ -129,6 +129,55 @@ async function handleCopyCommand(directory: string | undefined, options: Options
     }
 }
 
+async function handleToCommand(file: string, options: { errors?: boolean, tokens?: boolean, verbose?: boolean }) {
+    try {
+        const globalExclude = await readGlobalConfig();
+        const {
+            content,
+            warnings,
+            includedFiles,
+            totalTokens
+        } = await processPromptFile(path.resolve(file), globalExclude);
+
+        if (options.errors) {
+            // Output only errors
+            if (warnings.length > 0) {
+                console.log(warnings.join('\n'));
+            } else {
+                console.log('');
+            }
+        } else if (options.tokens) {
+            // Output only token count
+            console.log(totalTokens);
+        } else {
+            // Output the rendered content
+            console.log(content);
+
+            // If verbose, also output additional information to stderr
+            // so it doesn't interfere with piping the main output
+            if (options.verbose) {
+                console.error(`\nProcessed template from ${file}`);
+                console.error(`Total tokens: ${totalTokens}`);
+
+                if (warnings.length > 0) {
+                    console.error('\nWarnings:');
+                    console.error(warnings.join('\n'));
+                }
+
+                if (includedFiles) {
+                    console.error('\nIncluded files:');
+                    Object.entries(includedFiles).forEach(([file, tokens]) => {
+                        console.error(`${file} [${tokens}]`);
+                    });
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error processing template file:', error);
+        process.exit(1);
+    }
+}
+
 
 program
     .name('copa')
@@ -151,7 +200,14 @@ program
     .option('-f, --file <filePath>', 'Path to a single file to copy', (value, previous: string[]) => previous.concat([value]), [])
     .action(handleCopyCommand);
 
-// Default command (no arguments)
+program
+    .command('to <file>')
+    .description('Process a template file and output to stdout instead of clipboard')
+    .option('-err, --errors', 'Output only errors (like missing files)')
+    .option('-t, --tokens', 'Output only the token count')
+    .option('-v, --verbose', 'Display detailed information about processed files and token counts')
+    .action(handleToCommand);
+
 program
     .action(() => {
         console.log('Please specify a command: "template" (or "t") or "copy" (or "c")');

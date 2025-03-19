@@ -111,11 +111,17 @@ Ignore patterns support:
 
 ## Commands
 
-- `t, template <file>`: Process a template file
+- `t, template <file>`: Process a template file and copy to clipboard
   - Option: `-v, --verbose` (Display detailed file and token information)
 
+- `to <file>`: Process a template file and output to stdout
+  - Options:
+    - `-err, --errors` (Output only errors like missing files, empty string if none)
+    - `-t, --tokens` (Output only the token count)
+    - `-v, --verbose` (Display detailed file and token information to stderr)
+
 - `c, copy [directory]`: Copy files to clipboard (legacy mode)
-  - Options: 
+  - Options:
     - `-ex, --exclude <extensions>` (Exclude file types)
     - `-v, --verbose` (List copied files)
     - `-f, --file <filePath>` (Copy a single file)
