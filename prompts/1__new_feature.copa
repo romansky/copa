@@ -12,4 +12,5 @@ This is the source:
 
 Please help me add support for generating simple ASCII tree for a given location (assuming its a directory)
 
-For example when I do `@../src:dir`- this will be generated as directory structure instead of contents
+For example when I do `@../src:dir`- this will be generated as directory structure instead of contents.
+This is not implemented optimally, when I use `@.:-*.md,-**/subdir/**` its being detected as "dir"...

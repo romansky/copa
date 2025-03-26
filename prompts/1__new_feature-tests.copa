@@ -1,0 +1,32 @@
+
+This is the source:
+
+```
+{{@../src}}
+```
+
+Please help me add support for generating simple ASCII tree for a given location (assuming its a directory)
+For example when I do `@../src:dir`- this will be generated as directory structure instead of contents.
+
+The feature was implemented but some tests are failing, this is what the test expects: 
+
+
+        expect(result.content).toContain('Project structure:');
+        expect(result.content).toContain('===== Directory Structure: src =====');
+        expect(result.content).toContain('src');
+        expect(result.content).toContain('├── components/');
+        expect(result.content).toContain('│   ├── Button.js');
+        expect(result.content).toContain('│   └── Card.js');
+        expect(result.content).toContain('├── utils/');
+        expect(result.content).toContain('│   └── format.js');
+        expect(result.content).toContain('└── index.js');
+
+
+But the result is:
+
+        ├── components/
+        │   ├── Button.js
+        │   ├── Card.js
+        ├── utils/
+        │   ├── format.js
+        ├── index.js

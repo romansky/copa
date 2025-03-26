@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import {encoding_for_model} from "@dqbd/tiktoken";
 import {filterFiles} from "./filterFiles";
+import {generateDirectoryTree} from "./directoryTree";
 
 interface ProcessResult {
     content: string;
@@ -22,10 +23,35 @@ function countTokens(input: string): number {
     }
 }
 
-function parsePlaceholder(placeholder: string): { filePath: string; ignorePatterns: string[] } {
-    const [filePath, ignoreString] = placeholder.split(':');
-    const ignorePatterns = ignoreString ? ignoreString.split(',').map(p => p.trim()) : [];
-    return {filePath, ignorePatterns};
+function parsePlaceholder(placeholder: string): { filePath: string; ignorePatterns: string[]; isDir: boolean } {
+    // Split by the first colon to separate path and options
+    const colonIndex = placeholder.indexOf(':');
+    const filePath = colonIndex > -1 ? placeholder.substring(0, colonIndex) : placeholder;
+    const options = colonIndex > -1 ? placeholder.substring(colonIndex + 1) : '';
+
+    let ignorePatterns: string[] = [];
+    let isDir = false;
+
+    // Check for the dir option specifically
+    if (options === 'dir') {
+        isDir = true;
+    } else if (options.startsWith('dir,') || options.includes(',dir')) {
+        // Handle dir with additional options
+        isDir = true;
+        // Extract other patterns by removing 'dir' and any surrounding commas
+        const optionsWithoutDir = options
+            .replace(/^dir,|,dir$|,dir,/, ',')
+            .replace(/^,|,$/, '');
+
+        if (optionsWithoutDir) {
+            ignorePatterns = optionsWithoutDir.split(',').map(p => p.trim());
+        }
+    } else if (options) {
+        // If 'dir' is not present but other options are, treat as ignore patterns
+        ignorePatterns = options.split(',').map(p => p.trim());
+    }
+
+    return {filePath, ignorePatterns, isDir};
 }
 
 export async function processPromptFile(promptFilePath: string, globalExclude?: string): Promise<ProcessResult> {
@@ -43,14 +69,26 @@ async function processPromptTemplate(template: string, basePath: string, warning
     let totalTokens = 0;
 
     for (const placeholder of placeholders) {
-        const {filePath, ignorePatterns} = parsePlaceholder(placeholder.placeholder.slice(3, -2));
-        // Normalize and resolve the path
+        const {filePath, ignorePatterns, isDir} = parsePlaceholder(placeholder.placeholder.slice(3, -2));
         const normalizedPath = path.normalize(path.resolve(basePath, filePath));
         try {
-            const result = await processPath(normalizedPath, ignorePatterns, globalExclude);
-            processedContent = processedContent.replace(placeholder.placeholder, result.content);
-            Object.assign(includedFiles, result.includedFiles);
-            totalTokens += result.totalTokens;
+            let result;
+
+            if (isDir) {
+                const treeContent = await generateDirectoryTree(normalizedPath, ignorePatterns);
+                const formattedTree = `===== Directory Structure: ${filePath} =====\n${treeContent}\n\n`;
+                const treeTokens = countTokens(formattedTree);
+
+                processedContent = processedContent.replace(placeholder.placeholder, formattedTree);
+                includedFiles[`${filePath} (directory tree)`] = treeTokens;
+                totalTokens += treeTokens;
+            } else {
+                // Process as before for regular file references
+                result = await processPath(normalizedPath, ignorePatterns, globalExclude);
+                processedContent = processedContent.replace(placeholder.placeholder, result.content);
+                Object.assign(includedFiles, result.includedFiles);
+                totalTokens += result.totalTokens;
+            }
         } catch (error) {
             warnings.push(`Warning: Error reading ${filePath}: ${error}`);
         }

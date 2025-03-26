@@ -209,3 +209,107 @@ describe('Prompt Processor with Ignore Patterns', () => {
 
 });
 
+
+
+describe('Directory Tree Feature', () => {
+    let testDir: string;
+
+    beforeEach(async () => {
+        testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copa-dir-tree-test-'));
+
+        // Create a sample directory structure
+        await fs.mkdir(path.join(testDir, 'src'));
+        await fs.mkdir(path.join(testDir, 'src', 'components'));
+        await fs.mkdir(path.join(testDir, 'src', 'utils'));
+        await fs.mkdir(path.join(testDir, 'docs'));
+
+        // Create some files
+        await fs.writeFile(path.join(testDir, 'src', 'index.js'), 'console.log("root");');
+        await fs.writeFile(path.join(testDir, 'src', 'components', 'Button.js'), 'class Button {}');
+        await fs.writeFile(path.join(testDir, 'src', 'components', 'Card.js'), 'class Card {}');
+        await fs.writeFile(path.join(testDir, 'src', 'utils', 'format.js'), 'function format() {}');
+        await fs.writeFile(path.join(testDir, 'docs', 'README.md'), '# Documentation');
+        await fs.writeFile(path.join(testDir, '.gitignore'), 'node_modules');
+    });
+
+    afterEach(async () => {
+        await fs.rm(testDir, { recursive: true, force: true });
+    });
+
+    test('generates a directory tree for a given path', async () => {
+        const promptContent = 'Project structure:\n{{@src:dir}}\n\nDocs structure:\n{{@docs:dir}}';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        // Check for main project structure
+        expect(result.content).toContain('Project structure:');
+        expect(result.content).toContain('===== Directory Structure: src =====');
+        expect(result.content).toContain('src');
+        expect(result.content).toContain('├── components/');
+        expect(result.content).toContain('│   ├── Button.js');
+        expect(result.content).toContain('│   └── Card.js');
+        expect(result.content).toContain('├── utils/');
+        expect(result.content).toContain('│   └── format.js');
+        expect(result.content).toContain('└── index.js');
+
+        // Check for docs structure
+        expect(result.content).toContain('Docs structure:');
+        expect(result.content).toContain('===== Directory Structure: docs =====');
+        expect(result.content).toContain('docs');
+        expect(result.content).toContain('└── README.md');
+    });
+
+    test('applies ignore patterns to directory tree', async () => {
+        const promptContent = 'Project structure with ignore:\n{{@src:dir,*.js}}\n';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        // Should show directories but not JS files
+        expect(result.content).toContain('Project structure with ignore:');
+        expect(result.content).toContain('===== Directory Structure: src =====');
+        expect(result.content).toContain('src');
+        expect(result.content).toContain('├── components/');
+        expect(result.content).toContain('└── utils/');
+
+        // JS files should not be included
+        expect(result.content).not.toContain('Button.js');
+        expect(result.content).not.toContain('Card.js');
+        expect(result.content).not.toContain('format.js');
+        expect(result.content).not.toContain('index.js');
+    });
+
+    test('handles nested directory references correctly', async () => {
+        const promptContent = 'Components:\n{{@src/components:dir}}\n';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(result.content).toContain('Components:');
+        expect(result.content).toContain('===== Directory Structure: src/components =====');
+        expect(result.content).toContain('components');
+        expect(result.content).toContain('├── Button.js');
+        expect(result.content).toContain('└── Card.js');
+    });
+
+    test('combines dir option with file content references', async () => {
+        const promptContent = 'Structure:\n{{@src:dir}}\n\nContent:\n{{@src/index.js}}';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        // Should have both the directory structure and file content
+        expect(result.content).toContain('Structure:');
+        expect(result.content).toContain('===== Directory Structure: src =====');
+        expect(result.content).toContain('src');
+
+        expect(result.content).toContain('Content:');
+        expect(result.content).toContain('===== index.js =====');
+        expect(result.content).toContain('console.log("root");');
+    });
+})
