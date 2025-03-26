@@ -1,6 +1,6 @@
-import * as fs from 'fs/promises';
 import * as path from 'path';
-import {minimatch} from 'minimatch';
+import {filterFiles} from './filterFiles';
+import * as fs from 'fs/promises';
 
 interface TreeNode {
     name: string;
@@ -19,8 +19,12 @@ export async function generateDirectoryTree(
         }
 
         const rootName = path.basename(directoryPath);
-        const tree = await buildTree(directoryPath, rootName, ignorePatterns);
-        return renderTree(tree);
+        const tree = await buildTree(directoryPath, ignorePatterns);
+        return renderTree({
+            name: rootName,
+            children: tree,
+            isDirectory: true
+        });
     } catch (error) {
         return `Error generating directory tree: ${error}`;
     }
@@ -28,78 +32,97 @@ export async function generateDirectoryTree(
 
 async function buildTree(
     dirPath: string,
-    nodeName: string,
     ignorePatterns: string[] = []
-): Promise<TreeNode> {
-    const entries = await fs.readdir(dirPath, {withFileTypes: true});
-    const children: TreeNode[] = [];
+): Promise<TreeNode[]> {
+    // Use filterFiles to get all files respecting git ignore
+    const files = await filterFiles({
+        exclude: ignorePatterns.join(',')
+    }, dirPath);
 
-    // Process directories first, then files (for nicer output)
-    const sortedEntries = entries.sort((a, b) => {
-        if (a.isDirectory() && !b.isDirectory()) return -1;
-        if (!a.isDirectory() && b.isDirectory()) return 1;
+    if (!files) {
+        return [];
+    }
+
+    // Create a map for the tree structure
+    const treeMap = new Map<string, TreeNode>();
+
+    // Process all files to build directory tree
+    for (const filePath of files) {
+        // Get relative path from the base directory
+        const relativePath = path.relative(dirPath, filePath);
+        if (!relativePath) continue;
+
+        // Split path into components
+        const pathComponents = relativePath.split(path.sep);
+
+        // Build tree nodes for each path component
+        let currentPath = '';
+        let parentPath = '';
+
+        for (let i = 0; i < pathComponents.length; i++) {
+            const component = pathComponents[i];
+            parentPath = currentPath;
+            currentPath = currentPath ? path.join(currentPath, component) : component;
+
+            // Skip if we already have this node
+            if (treeMap.has(currentPath)) continue;
+
+            // Determine if this is a directory or file
+            const isDirectory = i < pathComponents.length - 1;
+
+            // Create new node
+            const newNode: TreeNode = {
+                name: component,
+                children: [],
+                isDirectory
+            };
+
+            // Add to map
+            treeMap.set(currentPath, newNode);
+
+            // Add to parent's children if not root
+            if (parentPath) {
+                const parent = treeMap.get(parentPath);
+                if (parent) {
+                    parent.children.push(newNode);
+                }
+            }
+        }
+    }
+
+    // Get all top-level nodes
+    const rootNodes: TreeNode[] = [];
+    for (const [nodePath, node] of treeMap.entries()) {
+        if (!nodePath.includes(path.sep)) {
+            rootNodes.push(node);
+        }
+    }
+
+    // Sort nodes - directories first, then alphabetically
+    rootNodes.sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
         return a.name.localeCompare(b.name);
     });
 
-    for (const entry of sortedEntries) {
-        const childPath = path.join(dirPath, entry.name);
-        const relativePath = path.relative(path.dirname(dirPath), childPath);
-
-        // Skip if the path matches any ignore pattern
-        if (shouldIgnore(relativePath, entry.name, ignorePatterns)) {
-            continue;
-        }
-
-        if (entry.isDirectory()) {
-            children.push(await buildTree(childPath, entry.name, ignorePatterns));
-        } else {
-            children.push({
-                name: entry.name,
-                children: [],
-                isDirectory: false
+    // Sort children of all nodes
+    for (const node of treeMap.values()) {
+        if (node.children.length > 0) {
+            node.children.sort((a, b) => {
+                if (a.isDirectory && !b.isDirectory) return -1;
+                if (!a.isDirectory && b.isDirectory) return 1;
+                return a.name.localeCompare(b.name);
             });
         }
     }
 
-    return {
-        name: nodeName,
-        children,
-        isDirectory: true
-    };
-}
-
-function shouldIgnore(filePath: string, fileName: string, ignorePatterns: string[]): boolean {
-    if (fileName.startsWith('.') && !ignorePatterns.includes('!.*')) {
-        return true; // Skip hidden files by default unless explicitly included
-    }
-
-    for (const pattern of ignorePatterns) {
-        const isNegated = pattern.startsWith('!');
-        const actualPattern = isNegated ? pattern.substring(1) : pattern;
-
-        if (actualPattern === '.*') {
-            if (fileName.startsWith('.') && !isNegated) return true;
-            if (fileName.startsWith('.') && isNegated) return false;
-        } else if (actualPattern.includes('*') || actualPattern.includes('/')) {
-            const matched = minimatch(filePath, actualPattern, {dot: true, matchBase: true});
-            if (matched && !isNegated) return true;
-            if (matched && isNegated) return false;
-        } else {
-            // Check if it's an exact file match or exact extension match
-            const matched = fileName === actualPattern ||
-                (actualPattern.startsWith('.') && actualPattern === path.extname(fileName));
-            if (matched && !isNegated) return true;
-            if (matched && isNegated) return false;
-        }
-    }
-
-    return false;
+    return rootNodes;
 }
 
 function renderTree(node: TreeNode): string {
     const lines: string[] = [];
 
-    function renderNode(node: TreeNode, prefix: string, isLast: boolean): void {
+    function renderNode(node: TreeNode, prefix: string): void {
         // For each child in the current node
         for (let i = 0; i < node.children.length; i++) {
             const child = node.children[i];
@@ -116,7 +139,7 @@ function renderTree(node: TreeNode): string {
 
             // If this child has children, render them with the appropriate prefix
             if (child.isDirectory && child.children.length > 0) {
-                renderNode(child, prefix + nextPrefix, isLastChild);
+                renderNode(child, prefix + nextPrefix);
             }
         }
     }
@@ -124,7 +147,7 @@ function renderTree(node: TreeNode): string {
     // Start rendering from the root node
     lines.push(node.name + "/");
     if (node.children.length > 0) {
-        renderNode(node, "", false);
+        renderNode(node, "");
     }
 
     return lines.join('\n');

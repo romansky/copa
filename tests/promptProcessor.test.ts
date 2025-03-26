@@ -272,8 +272,9 @@ describe('Directory Tree Feature', () => {
         expect(result.content).toContain('Project structure with ignore:');
         expect(result.content).toContain('===== Directory Structure: src =====');
         expect(result.content).toContain('src');
-        expect(result.content).toContain('├── components/');
-        expect(result.content).toContain('└── utils/');
+        // empty dirs
+        expect(result.content).not.toContain('├── components/');
+        expect(result.content).not.toContain('└── utils/');
 
         // JS files should not be included
         expect(result.content).not.toContain('Button.js');

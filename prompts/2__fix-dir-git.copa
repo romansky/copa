@@ -1,0 +1,18 @@
+I'm working on an OSS project
+
+```
+{{@./snips/about_project.md}}
+```
+
+This is the source:
+
+```
+{{@../src}}
+```
+
+The feature I'm working on is:
+- Add support for generating simple ASCII tree for a given location (assuming its a directory)
+For example when I do `@../src:dir`- this will be generated as directory structure instead of contents.
+
+The issue is that it's implemented using fs and not using `filterFiles`, as a result it's not respecting git ignore for example..
+
