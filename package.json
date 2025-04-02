@@ -1,6 +1,6 @@
 {
   "name": "copa",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "CoPa: Copy File Sources For Prompting and LLM Template Processing",
   "type": "commonjs",
   "main": "./dist/copa.js",
