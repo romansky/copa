@@ -29,7 +29,8 @@ function parsePlaceholder(placeholder: string): {
     filePath: string;
     ignorePatterns: string[];
     isDir: boolean;
-    isClean: boolean
+    isClean: boolean;
+    isEval: boolean;
 } {
     // Remove {{ @ and }}
     const innerPlaceholder = placeholder.slice(3, -2);
@@ -41,6 +42,7 @@ function parsePlaceholder(placeholder: string): {
     let ignorePatterns: string[] = [];
     let isDir = false;
     let isClean = false;
+    let isEval = false;
 
     if (optionsString) {
         const options = optionsString.split(',').map(p => p.trim());
@@ -51,6 +53,8 @@ function parsePlaceholder(placeholder: string): {
                 isDir = true;
             } else if (option === 'clean') {
                 isClean = true;
+            } else if (option === 'eval') {
+                isEval = true;
             } else {
                 // Assume anything else is an ignore pattern
                 remainingOptions.push(option);
@@ -59,15 +63,24 @@ function parsePlaceholder(placeholder: string): {
         ignorePatterns = remainingOptions;
     }
 
-    // :dir and :clean on the same placeholder don't make sense together for formatting.
-    // Let :dir take precedence if both are somehow specified.
-    if (isDir && isClean) {
-        console.warn(`Warning: Both ':dir' and ':clean' specified for placeholder "${placeholder}". ':dir' takes precedence.`);
-        isClean = false;
+    // Check for mutually exclusive options
+    if ((isDir && isClean) || (isDir && isEval) || (isClean && isEval)) {
+        const options = [];
+        if (isDir) options.push('dir');
+        if (isClean) options.push('clean');
+        if (isEval) options.push('eval');
+        console.warn(`Warning: Multiple incompatible options (${options.join(', ')}) specified for placeholder "${placeholder}". Only one will be applied.`);
+
+        // Set priority: dir > eval > clean
+        if (isDir) {
+            isClean = false;
+            isEval = false;
+        } else if (isEval) {
+            isClean = false;
+        }
     }
 
-
-    return {filePath, ignorePatterns, isDir, isClean};
+    return {filePath, ignorePatterns, isDir, isClean, isEval};
 }
 
 export async function processPromptFile(promptFilePath: string, globalExclude?: string): Promise<ProcessResult> {
@@ -102,7 +115,7 @@ async function processPromptTemplate(template: string, basePath: string, warning
 
     for (const placeholderMatch of placeholders) {
         const {placeholder, index} = placeholderMatch;
-        const {filePath, ignorePatterns, isDir, isClean} = parsePlaceholder(placeholder);
+        const {filePath, ignorePatterns, isDir, isClean, isEval} = parsePlaceholder(placeholder);
         const normalizedPath = path.normalize(path.resolve(basePath, filePath));
 
         let replacementText = '';
@@ -111,13 +124,35 @@ async function processPromptTemplate(template: string, basePath: string, warning
 
         try {
             if (isDir) {
-                // Handle directory tree generation
                 const treeContent = await generateDirectoryTree(normalizedPath, ignorePatterns);
                 replacementText = `===== Directory Structure: ${filePath} =====\n${treeContent}\n\n`;
                 replacementTokens = countTokens(replacementText);
                 placeholderIncludedFiles[`${filePath} (directory tree)`] = replacementTokens;
+            } else if (isEval) {
+                try {
+                    const templateContent = await fs.readFile(normalizedPath, 'utf-8');
+
+                    const templateBasePath = path.dirname(normalizedPath);
+                    const evalResult = await processPromptTemplate(
+                        templateContent.normalize('NFC'),
+                        templateBasePath,
+                        warnings,
+                        globalExclude
+                    );
+
+                    replacementText = evalResult.content;
+                    replacementTokens = evalResult.totalTokens;
+
+                    for (const [includedPath, tokenCount] of Object.entries(evalResult.includedFiles)) {
+                        placeholderIncludedFiles[`eval:${filePath}:${includedPath}`] = tokenCount;
+                    }
+
+                    placeholderIncludedFiles[`eval:${filePath}`] = replacementTokens;
+
+                } catch (error: any) {
+                    throw new Error(`Failed to evaluate template ${filePath}: ${error.message}`);
+                }
             } else {
-                // Handle file/folder content inclusion (potentially clean)
                 const pathResult = await processPath(normalizedPath, ignorePatterns, globalExclude);
 
                 if (isClean) {

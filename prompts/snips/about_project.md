@@ -8,6 +8,7 @@ references.
 • Include file content with `===== filename =====` wrappers (default)
 • Include raw file content without wrappers using `:clean` option (e.g., `{{@file.txt:clean}}`)
 • Include directory structure trees using `:dir` option (e.g., `{{@src:dir}}`)
+• Evaluate nested templates using `:eval` option (e.g., `{{@other-template.copa:eval}}`)
 • Copy folders/files in LLM-friendly format (`copa copy`)
 • Inline glob-based ignore rules (e.g., `{{@tests:-*.snap}}`)
 • `.gitignore` support
