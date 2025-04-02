@@ -10,6 +10,4 @@ This is the source:
 {{@../src}}
 ```
 
-Please help me add support for generating simple ASCII tree for a given location (assuming its a directory)
-
-For example when I do `@../src:dir`- this will be generated as directory structure instead of contents
+Please help me add support for including contents of file without the file name wrapper using `:clean` modifier

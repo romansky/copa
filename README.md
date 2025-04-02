@@ -40,6 +40,8 @@ Install CoPa globally:
 
 ```sh
 npm install -g copa
+# or yarn
+yarn global add copa
 ```
 
 Then use it as:

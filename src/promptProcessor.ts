@@ -14,7 +14,9 @@ interface ProcessResult {
 function countTokens(input: string): number {
     const tokenize = encoding_for_model('gpt-4');
     try {
-        return tokenize.encode(input).length;
+        // Normalize before counting, like clipboard copy
+        const normalizedInput = input.normalize('NFC');
+        return tokenize.encode(normalizedInput).length;
     } catch (e) {
         console.error('Error counting tokens for input', e);
         throw new Error('Error counting tokens for input');
@@ -23,43 +25,72 @@ function countTokens(input: string): number {
     }
 }
 
-function parsePlaceholder(placeholder: string): { filePath: string; ignorePatterns: string[]; isDir: boolean } {
+function parsePlaceholder(placeholder: string): {
+    filePath: string;
+    ignorePatterns: string[];
+    isDir: boolean;
+    isClean: boolean
+} {
+    // Remove {{ @ and }}
+    const innerPlaceholder = placeholder.slice(3, -2);
     // Split by the first colon to separate path and options
-    const colonIndex = placeholder.indexOf(':');
-    const filePath = colonIndex > -1 ? placeholder.substring(0, colonIndex) : placeholder;
-    const options = colonIndex > -1 ? placeholder.substring(colonIndex + 1) : '';
+    const colonIndex = innerPlaceholder.indexOf(':');
+    const filePath = colonIndex > -1 ? innerPlaceholder.substring(0, colonIndex) : innerPlaceholder;
+    const optionsString = colonIndex > -1 ? innerPlaceholder.substring(colonIndex + 1) : '';
 
     let ignorePatterns: string[] = [];
     let isDir = false;
+    let isClean = false;
 
-    // Check for the dir option specifically
-    if (options === 'dir') {
-        isDir = true;
-    } else if (options.startsWith('dir,') || options.includes(',dir')) {
-        // Handle dir with additional options
-        isDir = true;
-        // Extract other patterns by removing 'dir' and any surrounding commas
-        const optionsWithoutDir = options
-            .replace(/^dir,|,dir$|,dir,/, ',')
-            .replace(/^,|,$/, '');
+    if (optionsString) {
+        const options = optionsString.split(',').map(p => p.trim());
+        const remainingOptions: string[] = [];
 
-        if (optionsWithoutDir) {
-            ignorePatterns = optionsWithoutDir.split(',').map(p => p.trim());
+        for (const option of options) {
+            if (option === 'dir') {
+                isDir = true;
+            } else if (option === 'clean') {
+                isClean = true;
+            } else {
+                // Assume anything else is an ignore pattern
+                remainingOptions.push(option);
+            }
         }
-    } else if (options) {
-        // If 'dir' is not present but other options are, treat as ignore patterns
-        ignorePatterns = options.split(',').map(p => p.trim());
+        ignorePatterns = remainingOptions;
     }
 
-    return {filePath, ignorePatterns, isDir};
+    // :dir and :clean on the same placeholder don't make sense together for formatting.
+    // Let :dir take precedence if both are somehow specified.
+    if (isDir && isClean) {
+        console.warn(`Warning: Both ':dir' and ':clean' specified for placeholder "${placeholder}". ':dir' takes precedence.`);
+        isClean = false;
+    }
+
+
+    return {filePath, ignorePatterns, isDir, isClean};
 }
 
 export async function processPromptFile(promptFilePath: string, globalExclude?: string): Promise<ProcessResult> {
     const content = await fs.readFile(promptFilePath, 'utf-8');
     const warnings: string[] = [];
 
-    const result = await processPromptTemplate(content, path.dirname(promptFilePath), warnings, globalExclude);
+    // Process the template content recursively or iteratively if needed (though current structure is flat)
+    const result = await processPromptTemplate(content.normalize('NFC'), path.dirname(promptFilePath), warnings, globalExclude);
     return {...result, warnings};
+}
+
+function findPlaceholders(template: string): Array<{ placeholder: string; index: number }> {
+    const regex = /{{@(.*?)}}/g;
+    const placeholders = [];
+    let match;
+
+    while ((match = regex.exec(template)) !== null) {
+        placeholders.push({placeholder: match[0], index: match.index});
+    }
+
+    // Sort by index to process in order
+    placeholders.sort((a, b) => a.index - b.index);
+    return placeholders;
 }
 
 async function processPromptTemplate(template: string, basePath: string, warnings: string[], globalExclude?: string): Promise<ProcessResult> {
@@ -67,85 +98,136 @@ async function processPromptTemplate(template: string, basePath: string, warning
     let processedContent = template;
     const includedFiles: { [filePath: string]: number } = {};
     let totalTokens = 0;
+    let accumulatedOffset = 0; // Keep track of length changes during replacement
 
-    for (const placeholder of placeholders) {
-        const {filePath, ignorePatterns, isDir} = parsePlaceholder(placeholder.placeholder.slice(3, -2));
+    for (const placeholderMatch of placeholders) {
+        const {placeholder, index} = placeholderMatch;
+        const {filePath, ignorePatterns, isDir, isClean} = parsePlaceholder(placeholder);
         const normalizedPath = path.normalize(path.resolve(basePath, filePath));
+
+        let replacementText = '';
+        let replacementTokens = 0;
+        const placeholderIncludedFiles: { [key: string]: number } = {};
+
         try {
-            let result;
-
             if (isDir) {
+                // Handle directory tree generation
                 const treeContent = await generateDirectoryTree(normalizedPath, ignorePatterns);
-                const formattedTree = `===== Directory Structure: ${filePath} =====\n${treeContent}\n\n`;
-                const treeTokens = countTokens(formattedTree);
-
-                processedContent = processedContent.replace(placeholder.placeholder, formattedTree);
-                includedFiles[`${filePath} (directory tree)`] = treeTokens;
-                totalTokens += treeTokens;
+                replacementText = `===== Directory Structure: ${filePath} =====\n${treeContent}\n\n`;
+                replacementTokens = countTokens(replacementText);
+                placeholderIncludedFiles[`${filePath} (directory tree)`] = replacementTokens;
             } else {
-                // Process as before for regular file references
-                result = await processPath(normalizedPath, ignorePatterns, globalExclude);
-                processedContent = processedContent.replace(placeholder.placeholder, result.content);
-                Object.assign(includedFiles, result.includedFiles);
-                totalTokens += result.totalTokens;
+                // Handle file/folder content inclusion (potentially clean)
+                const pathResult = await processPath(normalizedPath, ignorePatterns, globalExclude);
+
+                if (isClean) {
+                    // :clean modifier - concatenate raw content
+                    if (pathResult.files.length > 1) {
+                        warnings.push(`Warning: Placeholder "${placeholder}" with ':clean' resolved to multiple files (${pathResult.files.length}). Concatenating raw content.`);
+                    }
+                    for (const file of pathResult.files) {
+                        // Add raw content directly
+                        replacementText += file.content.normalize('NFC'); // Ensure NFC before concat
+                        // Token count is for the raw content part
+                        const fileTokens = countTokens(file.content);
+                        placeholderIncludedFiles[`${file.relativePath} (clean)`] = fileTokens;
+                        replacementTokens += fileTokens;
+                    }
+                    // Add a newline if concatenating multiple clean files? Maybe not, let the user manage whitespace.
+                } else {
+                    // Default behavior - format each file
+                    for (const file of pathResult.files) {
+                        const formattedContent = formatFileContent(file.relativePath, file.content.normalize('NFC'));
+                        replacementText += formattedContent;
+                        const fileTokens = countTokens(formattedContent);
+                        placeholderIncludedFiles[file.relativePath] = fileTokens;
+                        replacementTokens += fileTokens;
+                    }
+                }
+                // Add warnings from processPath if any (e.g., path not found)
+                warnings.push(...pathResult.warnings);
             }
-        } catch (error) {
-            warnings.push(`Warning: Error reading ${filePath}: ${error}`);
+
+            // Perform replacement using adjusted index
+            const replaceStartIndex = index + accumulatedOffset;
+            processedContent = processedContent.substring(0, replaceStartIndex) + replacementText + processedContent.substring(replaceStartIndex + placeholder.length);
+            accumulatedOffset += replacementText.length - placeholder.length;
+
+            // Update overall totals
+            Object.assign(includedFiles, placeholderIncludedFiles);
+            totalTokens += replacementTokens;
+
+        } catch (error: any) {
+            // Handle errors during processing of a specific placeholder (like path not found from processPath)
+            const errorMsg = `Warning: Error processing placeholder "${placeholder}" for path "${filePath}": ${error.message || error}`;
+            warnings.push(errorMsg);
+            // Replace the placeholder with an error message or empty string to avoid breaking template structure?
+            const errorReplacement = `[Error: ${error.message || 'Placeholder processing failed'}]\n`;
+            const replaceStartIndex = index + accumulatedOffset;
+            processedContent = processedContent.substring(0, replaceStartIndex) + errorReplacement + processedContent.substring(replaceStartIndex + placeholder.length);
+            accumulatedOffset += errorReplacement.length - placeholder.length;
         }
     }
+
+    // Recalculate total tokens from the final processed content for accuracy
+    // This accounts for the template text itself and ensures consistency.
+    totalTokens = countTokens(processedContent);
 
     return {content: processedContent, includedFiles, totalTokens, warnings};
 }
 
+
 async function processPath(pathToProcess: string, ignorePatterns: string[], globalExclude?: string): Promise<{
-    content: string;
-    includedFiles: { [filePath: string]: number };
-    totalTokens: number;
+    files: Array<{ relativePath: string; content: string }>;
+    warnings: string[];
 }> {
+    const warnings: string[] = [];
     const filteredFiles = await filterFiles({exclude: ignorePatterns.join(',')}, pathToProcess, globalExclude);
 
-    if (!filteredFiles) {
-        throw new Error(`path [${pathToProcess}] was not found. Setting empty content.`);
+    if (!filteredFiles || filteredFiles.length === 0) {
+        // Throw an error if no files are found or path doesn't exist, handled by caller
+        throw new Error(`Path [${pathToProcess}] not found or yielded no files after filtering.`);
     }
 
-    let content = '';
-    const includedFiles: { [filePath: string]: number } = {};
-    let totalTokens = 0;
-    // Normalize the base directory path
-    const pathDir = path.normalize(path.dirname(pathToProcess));
+    const filesData: Array<{ relativePath: string; content: string }> = [];
+    // Determine the base directory for calculating relative paths
+    // If pathToProcess is a file, its dirname is the base. If it's a dir, it is the base.
+    let stats;
+    try {
+        stats = await fs.stat(pathToProcess);
+    } catch (e) {
+        throw new Error(`Path [${pathToProcess}] not found.`);
+    }
+    const baseDir = stats.isDirectory() ? pathToProcess : path.dirname(pathToProcess);
+
 
     for (const file of filteredFiles) {
-        // Normalize and resolve the full file path
-        const fullPath = path.normalize(path.resolve(pathDir, file));
-        const fileContent = await fs.readFile(fullPath, {
-            encoding: 'utf8',
-            flag: 'r'
-        });
-        // Get the relative path and normalize it
-        const relativePath = path.normalize(path.relative(pathDir, file));
-        const formattedContent = formatFileContent(relativePath, fileContent.normalize('NFC'));
-        const tokens = countTokens(formattedContent);
+        try {
+            // Normalize and resolve the full file path - already done by filterFiles
+            const fullPath = path.normalize(file); // filterFiles should return absolute paths now
+            const fileContent = await fs.readFile(fullPath, {
+                encoding: 'utf8',
+                flag: 'r'
+            });
+            // Get the relative path from the original baseDir used for filtering/resolving
+            const relativePath = path.normalize(path.relative(baseDir, fullPath));
 
-        content += formattedContent;
-        includedFiles[file] = tokens;
-        totalTokens += tokens;
+            filesData.push({relativePath, content: fileContent});
+        } catch (readError: any) {
+            warnings.push(`Warning: Could not read file ${file}: ${readError.message}`);
+            // Optionally skip the file or include an error marker in content? Skipping for now.
+        }
     }
 
-    return {content, includedFiles, totalTokens};
-}
-
-function findPlaceholders(template: string): Array<{ placeholder: string }> {
-    const regex = /{{@(.*?)}}/g;
-    const placeholders = [];
-    let match;
-
-    while ((match = regex.exec(template)) !== null) {
-        placeholders.push({placeholder: match[0]});
+    if (filesData.length === 0 && warnings.length === 0) {
+        // This case might happen if filterFiles returned files but reading all failed
+        throw new Error(`Path [${pathToProcess}] resolved files, but none could be read.`);
     }
 
-    return placeholders;
+
+    return {files: filesData, warnings};
 }
 
 function formatFileContent(relativePath: string, content: string): string {
-    return `===== ${relativePath} =====\n${content}\n\n`;
+    return `===== ${path.normalize(relativePath)} =====\n${content}\n\n`;
 }

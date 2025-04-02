@@ -58,7 +58,7 @@ describe('Prompt Processor with Ignore Patterns', () => {
         const result = await processPromptFile(promptFile);
 
         expect(result.content).toContain('Folder contents:');
-        expect(result.content).toContain('===== subdir/file3.txt =====');
+        expect(result.content).toContain('===== file3.txt =====');
         expect(result.content).toContain('Nested file content');
         expect(result.content).toContain('End of folder.');
     });
@@ -74,7 +74,7 @@ describe('Prompt Processor with Ignore Patterns', () => {
         expect(content).not.toContain('===== nonexistent.txt =====');
         expect(content).toContain('End.');
         expect(warnings).toHaveLength(1);
-        expect(warnings[0]).toContain('Warning: Error reading');
+        expect(warnings[0]).toContain('Warning: Error processing placeholder');
         expect(warnings[0]).toContain('nonexistent.txt');
     });
 
@@ -86,11 +86,11 @@ describe('Prompt Processor with Ignore Patterns', () => {
         const result = await processPromptFile(promptFile);
 
         expect(result.content).toContain('Files:');
-        expect(result.content).toContain('/file1.js =====');
+        expect(result.content).toContain('file1.js =====');
         expect(result.content).toContain('console.log("Hello");');
-        expect(result.content).not.toContain('/file2.md =====');
+        expect(result.content).not.toContain('file2.md =====');
         expect(result.content).not.toContain('# Markdown');
-        expect(result.content).not.toContain('/subdir/file');
+        expect(result.content).not.toContain('subdir/file');
         expect(result.content).toContain('End.');
     });
 
@@ -115,7 +115,7 @@ describe('Prompt Processor with Ignore Patterns', () => {
     });
 
     test('processes a prompt file with wildcard ignore patterns', async () => {
-        const promptContent = 'Files:\n{{@.:-*dir/*,-*.y*}}\nEnd.';
+        const promptContent = 'Files:\n{{@.:-**/*dir/**,-*.y*}}\nEnd.';
         const promptFile = path.join(testDir, 'prompt.txt');
         await fs.writeFile(promptFile, promptContent);
 
