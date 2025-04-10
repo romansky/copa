@@ -1,0 +1,23 @@
+I'm working on an OSS project
+
+```
+{{@./snips/about_project.md}}
+```
+
+This is the source:
+
+```
+{{@../src}}
+```
+
+When I run tests, it this is what I get:
+````
+===== component.tsx (imports removed) =====
+````
+
+While expecting:
+````
+===== src/components/component.tsx (imports removed) =====
+````
+
+How can I fix this?

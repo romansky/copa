@@ -1,0 +1,50 @@
+I'm working on an OSS project
+
+```
+{{@./snips/about_project.md}}
+```
+
+This is the source:
+
+```
+{{@../src}}
+```
+
+Please help me test support for removing imports from imported sources files using `:remove-imports` modifier 
+
+- applies when importing single file or a folder
+- per language handling by filename (`.ts`, `.tsx`)
+- for now just implement for `.ts` & `.tsx`
+
+Using this as reference:
+````
+describe('Prompt Processor with remove imports from file', () => {
+    let testDir: string;
+
+    const cleanPath = (path: string) => path.replace(testDir + '/', '');
+
+    beforeEach(async () => {
+        testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copa-prompt-test-'));
+        await fs.mkdir(path.join(testDir, 'subdir'));
+        await fs.writeFile(path.join(testDir, 'file1.js'), 'console.log("Hello");');
+        await fs.writeFile(path.join(testDir, 'file2.md'), '# Markdown');
+        await fs.writeFile(path.join(testDir, 'subdir', 'file3.txt'), 'Nested file content');
+    });
+
+    afterEach(async () => {
+        await fs.rm(testDir, {recursive: true, force: true});
+    });
+
+    test('....', async () => {
+        const promptContent = 'This is...';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(...).toContain('...');
+    });
+
+    
+})
+````

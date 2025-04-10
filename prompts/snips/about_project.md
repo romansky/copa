@@ -7,6 +7,8 @@ references.
 • Templated prompts using `{{@path[:options]}}` syntax
 • Include file content with `===== filename =====` wrappers (default)
 • Include raw file content without wrappers using `:clean` option (e.g., `{{@file.txt:clean}}`)
+• Remove import/require statements from TS/TSX files using `:remove-imports` option (
+e.g., `{{@src/component.tsx:remove-imports}}`)
 • Include directory structure trees using `:dir` option (e.g., `{{@src:dir}}`)
 • Evaluate nested templates using `:eval` option (e.g., `{{@other-template.copa:eval}}`)
 • Copy folders/files in LLM-friendly format (`copa copy`)
@@ -32,6 +34,12 @@ Inject this helper function directly:
 
 Directory structure of config:
 {{@config:dir}}
+
+Analyze this React component's core logic (imports removed):
+{{@src/components/MyComponent.tsx:remove-imports}}
+
+Include all utils code, clean and without imports:
+{{@src/utils:clean,remove-imports}}
 ```
 
 Run:
@@ -63,11 +71,22 @@ config/
 └── deploy.sh
 
 
+Analyze this React component's core logic (imports removed):
+===== src/components/MyComponent.tsx (imports removed) =====
+<content of MyComponent.tsx without import/require lines>
+
+
+Include all utils code, clean and without imports:
+<raw content of src/utils/helper.js without imports>
+<raw content of src/utils/anotherUtil.ts without imports>
+
+
 ```
 
 🧠 Use Cases
 • Repeatable prompts with consistent file context
 • Fine-grained control over included source files and directories
 • Injecting raw code snippets or data without formatting
+• Focusing LLMs on core logic by stripping boilerplate imports from TS/TSX files
 • Great for prompt engineering in code-focused workflows
 

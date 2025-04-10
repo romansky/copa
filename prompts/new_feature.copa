@@ -10,4 +10,9 @@ This is the source:
 {{@../src}}
 ```
 
-Please help me add support for evaluating nested template using `:eval` modifier
+Please help me add support for removing imports from imported sources files using `:remove-imports` modifier 
+(if you have a better name for it, let me know)
+
+- applies when importing single file or a folder
+- per language handling by filename (`.ts`, `.tsx`)
+- for now just implement for `.ts` & `.tsx`
