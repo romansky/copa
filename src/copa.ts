@@ -9,6 +9,7 @@ import {filterFiles} from "./filterFiles";
 import {processPromptFile} from './promptProcessor';
 import path from "path";
 import {copyToClipboard} from "./copyToClipboard";
+import { getFileContentAsText } from './fileReader';
 
 function countTokens(input: string): number {
     const tokenize = encoding_for_model('gpt-4');
@@ -28,44 +29,76 @@ async function copyFilesToClipboard(source: {
 }, options: Options): Promise<void> {
     try {
         const globalExclude = await readGlobalConfig();
-        let files = source.directory
-            ? await filterFiles(options, source.directory, globalExclude)
-            : (source.filePaths ?? []);
+        let filesToProcess: string[] = [];
+
+        if (source.directory) {
+            const filtered = await filterFiles(options, source.directory, globalExclude);
+            filesToProcess = filtered ?? [];
+        } else if (source.filePaths && source.filePaths.length > 0) {
+            // For explicitly listed files, we don't run them through the full filterFiles logic again
+            // as they are already resolved paths. We assume they are wanted.
+            // However, filterFiles does gitignore checking, which might be desired.
+            // For now, let's assume direct file paths bypass complex filtering but respect global/inline excludes.
+            // A simpler check might be needed if globalExclude should apply to direct files.
+            // For simplicity, if filePaths are given, we process them directly.
+            // Re-evaluating: filterFiles can take a single file path. Let's use it for consistency.
+            const resolvedFiles = [];
+            for (const fp of source.filePaths) {
+                const filtered = await filterFiles(options, fp, globalExclude);
+                if (filtered) resolvedFiles.push(...filtered);
+            }
+            filesToProcess = resolvedFiles;
+        }
+
+
+        if (filesToProcess.length === 0) {
+            console.log(`No files found to copy from ${source.directory ? source.directory : (source.filePaths?.join(', ') ?? 'files list')}.`);
+            return;
+        }
+
         let totalTokens = 0;
         const tokensPerFile: { [_: string]: number } = {};
         let content = '';
 
-        for (const file of files ?? []) {
+        for (const file of filesToProcess) {
             try {
-                const fileContent = await fs.readFile(file, {
-                    encoding: 'utf8',
-                    flag: 'r'
-                });
+                // --- MODIFIED PART ---
+                const fileContent = await getFileContentAsText(file); // Use the new utility
+                // --- END MODIFIED PART ---
+
                 const fileSection = `===== ${file} =====\n${fileContent}\n\n`;
                 content += fileSection;
                 tokensPerFile[file] = countTokens(fileSection);
                 totalTokens += tokensPerFile[file];
-            } catch (error) {
-                console.error(`Error reading file ${file}:`, error);
+            } catch (error: any) {
+                // This catch is a fallback. getFileContentAsText should handle most read/parse errors.
+                console.error(`Error processing file ${file} for copy:`, error.message);
+                const errorMsg = `[Error processing file ${path.basename(file)}: ${error.message}]`;
+                const errorSection = `===== ${file} =====\n${errorMsg}\n\n`;
+                content += errorSection;
+                // Still count tokens for the error message part
+                const errorTokens = countTokens(errorSection);
+                tokensPerFile[file] = errorTokens;
+                totalTokens += errorTokens;
             }
         }
 
-        // Normalize the content to ensure consistent Unicode representation
         content = content.normalize('NFC');
 
         await copyToClipboard(content);
-        console.log(`${files?.length} files from ${source.directory ? source.directory : 'files list'} have been copied to the clipboard.`);
+        console.log(`${filesToProcess.length} file(s) from ${source.directory ? source.directory : (source.filePaths?.join(', ') ?? 'input list')} have been copied to the clipboard.`);
         console.log(`Total tokens: ${totalTokens}`);
 
         if (options.verbose) {
             console.log('Copied files:');
-            files?.forEach(file => console.log(`${file} [${tokensPerFile[file]}]`));
+            filesToProcess.forEach(file => console.log(`${file} [${tokensPerFile[file]}]`));
         }
-    } catch (error) {
-        console.error('Error copying files to clipboard:', error);
+    } catch (error: any) {
+        console.error('Error copying files to clipboard:', error.message);
         process.exit(1);
     }
 }
+
 
 async function handleTemplateCommand(file: string, options: { verbose?: boolean }) {
     try {

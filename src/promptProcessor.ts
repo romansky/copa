@@ -3,6 +3,8 @@ import * as path from 'path';
 import {encoding_for_model} from "@dqbd/tiktoken";
 import {filterFiles} from "./filterFiles";
 import {generateDirectoryTree} from "./directoryTree";
+import {getFileContentAsText} from './fileReader';
+
 
 interface ProcessResult {
     content: string;
@@ -272,23 +274,30 @@ async function processPath(pathToProcess: string, ignorePatterns: string[], glob
     for (const file of filteredFiles) {
         try {
             const fullPath = path.normalize(file);
-            const fileContent = await fs.readFile(fullPath, {
-                encoding: 'utf8',
-                flag: 'r'
-            });
+            const fileContent = await getFileContentAsText(fullPath);
 
             const relativePath = path.normalize(path.relative(templateBasePath, fullPath));
 
             filesData.push({relativePath, content: fileContent, fullPath});
         } catch (readError: any) {
-            warnings.push(`Warning: Could not read file ${file}: ${readError.message}`);
+            const errorMessage = `[Error processing file ${path.basename(file)}: ${readError.message}]`;
+            warnings.push(`Warning: Could not fully process file ${file}: ${readError.message}`);
+            const relativePath = path.normalize(path.relative(templateBasePath, file));
+            filesData.push({relativePath, content: errorMessage, fullPath: file});
         }
     }
 
-    if (filesData.length === 0 && filteredFiles.length > 0) {
-        throw new Error(`Path [${pathToProcess}] resolved files, but none could be read.`);
-    }
+    const successfullyReadFilesCount = filesData.filter(f =>
+        !f.content.startsWith("[Error") &&
+        !f.content.startsWith("[Content of")
+    ).length;
 
+    if (successfullyReadFilesCount === 0 && filteredFiles.length > 0) {
+        // This means all files that were found by filterFiles either couldn't be read
+        // or resulted in a specific error message from getFileContentAsText.
+        // We don't throw an error here, as the content itself will contain the error messages.
+        warnings.push(`Warning: Path [${pathToProcess}] resolved ${filteredFiles.length} file(s), but none could be meaningfully read or all are empty/binary.`);
+    }
 
     return {files: filesData, warnings};
 }
