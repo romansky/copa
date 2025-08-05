@@ -1,6 +1,6 @@
 <h1 align="center">
     <img width="100" height="100" src="copa.svg" alt="CoPa Logo"><br>
-    CoPa: LLM Prompting Templating
+    CoPa: Prompt Engineering Templating Language and CLI Tool 
 </h1>
 
 [![npm version](https://badge.fury.io/js/copa.svg)](https://badge.fury.io/js/copa)
