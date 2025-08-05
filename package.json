@@ -1,6 +1,6 @@
 {
   "name": "copa",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "CoPa: Prompt Engineering Templating Language and CLI Tool",
   "type": "commonjs",
   "main": "./dist/copa.js",
