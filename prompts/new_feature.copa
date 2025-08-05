@@ -10,71 +10,7 @@ This is the source:
 {{@../src}}
 ```
 
-Please help me add support for reading certain files types, here's some code from another project :
+Please help me add support for embedding web pages, the inner location would be:
+`@https://www.example.com/page.html`
 
-````typescript
-
-import * as officeParser from "officeparser";
-import {Buffer} from "buffer";
-
-export class FileReader {
-    
-    async getFileContent() {
-        
-        try {
-        
-            // --- Step 3: Process Content Based on Metadata ---
-            const isOfficedocument = fileType.startsWith("application/vnd.openxmlformats-officedocument") ||
-                fileType.startsWith("application/vnd.ms-") ||
-                fileType === "application/msword";
-
-            const isTextBased = fileType.startsWith("text/") ||
-                fileType === "application/json" ||
-                fileType.includes("xml") ||
-                fileType.includes("javascript");
-
-            if (isOfficedocument || ["docx", "doc", "xlsx", "xls", "pptx", "ppt", "pdf"].includes(fileExt)) {
-                try {
-                    textContent = await officeParser.parseOfficeAsync(fileBlob);
-                    if (!textContent || textContent.trim().length === 0) {
-                        console.debug(`officeParser returned empty for ${fileName}. Falling back to text decode.`);
-                        textContent = new TextDecoder().decode(fileBlob);
-                    }
-                } catch (parserError) {
-                    console.warn(
-                        `officeParser failed for ${fileName} (${fileType}, ${fileExt}). Falling back to text decode. Error: ${parserError}`
-                    );
-                    // Fallback: Treat as text if parsing fails
-                    textContent = new TextDecoder().decode(fileBlob);
-                }
-            } else if (isTextBased || ["txt", "csv", "json", "xml", "js", "ts", "html", "css"].includes(fileExt)) {
-                textContent = new TextDecoder().decode(fileBlob);
-            } else {
-                console.warn(`Attempting generic text decode for unknown file type: ${fileName} (${fileType})`);
-                try {
-                    textContent = new TextDecoder("utf-8", {fatal: false}).decode(fileBlob);
-                } catch (decodeError) {
-                    textContent = `[Content of file ${fileName} could not be decoded (${fileType})]`;
-                }
-                if (!textContent || textContent.trim().length === 0) {
-                    textContent = `[Content of file ${fileName} could not be extracted or is empty (${fileType})]`;
-                }
-            }
-
-            return {
-                text: textContent.trim(),
-                metadata: {
-                    name: fileName,
-                    type: fileType,
-                },
-            };
-        } catch (error: any) {
-            
-        }
-    }
-
-
-}
-````
-
-- applies when importing single file or a folder
+Just leave a placeholder function with the url as input and expect string as output, I will implement the inside of it..

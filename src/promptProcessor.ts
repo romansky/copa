@@ -1,10 +1,33 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import {encoding_for_model} from "@dqbd/tiktoken";
-import {filterFiles} from "./filterFiles";
+import {lev} from "./lev";
 import {generateDirectoryTree} from "./directoryTree";
-import {getFileContentAsText} from './fileReader';
+import {filterFiles} from "./filterFiles";
+import {getFileContentAsText} from "./fileReader";
 
+type PlaceholderType = 'file' | 'dir' | 'eval' | 'web';
+
+interface PlaceholderOptions {
+    type: PlaceholderType;
+    isClean: boolean;
+    isRemoveImports: boolean;
+    ignorePatterns: string[];
+}
+
+interface TextNode {
+    type: 'text';
+    content: string;
+}
+
+interface PlaceholderNode {
+    type: 'placeholder';
+    original: string; // "{{@path/to/file:clean}}"
+    resource: string; // "path/to/file" or "https://..."
+    options: PlaceholderOptions;
+}
+
+type TemplateNode = TextNode | PlaceholderNode;
 
 interface ProcessResult {
     content: string;
@@ -13,15 +36,24 @@ interface ProcessResult {
     totalTokens: number;
 }
 
+async function fetchWebPageContent(url: string): Promise<string> {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+        const contentType = response.headers.get('content-type');
+        if (contentType && (contentType.includes('text/html') || contentType.includes('text/plain') || contentType.includes('application/json') || contentType.includes('application/xml'))) {
+            return await response.text();
+        }
+        return `[Content from ${url} is not plain text (type: ${contentType})]`;
+    } catch (error: any) {
+        return `[Error fetching content from ${url}: ${error.message}]`;
+    }
+}
+
 function countTokens(input: string): number {
     const tokenize = encoding_for_model('gpt-4');
     try {
-        // Normalize before counting, like clipboard copy
-        const normalizedInput = input.normalize('NFC');
-        return tokenize.encode(normalizedInput).length;
-    } catch (e) {
-        console.error('Error counting tokens for input', e);
-        throw new Error('Error counting tokens for input');
+        return tokenize.encode(input.normalize('NFC')).length;
     } finally {
         tokenize.free();
     }
@@ -29,87 +61,225 @@ function countTokens(input: string): number {
 
 function removeImportsFromFile(content: string, filePath: string): string {
     const extension = path.extname(filePath).toLowerCase();
-    if (extension !== '.ts' && extension !== '.tsx') {
-        return content; // Only process .ts and .tsx files
-    }
-
+    if (extension !== '.ts' && extension !== '.tsx') return content;
     const importRegex = /^\s*import\s+(?:type\s+)?(?:[\w*{}\n\r\t, ]+)\s+from\s+["'].*?["'];?.*$/gm;
-    // Remove matched import statements
-    let modifiedContent = content.replace(importRegex, '');
-    modifiedContent = modifiedContent.replace(/(\r?\n){3,}/g, '\n');
-
+    let modifiedContent = content.replace(importRegex, '').replace(/(\r?\n){3,}/g, '\n');
     return modifiedContent.trimStart();
 }
 
-function parsePlaceholder(placeholder: string, warnings: string[]): {
-    filePath: string;
-    ignorePatterns: string[];
-    isDir: boolean;
-    isClean: boolean;
-    isEval: boolean;
-    isRemoveImports: boolean; // Added new flag
-} {
-    // Remove {{ @ and }}
-    const innerPlaceholder = placeholder.slice(3, -2);
-    // Split by the first colon to separate path and options
-    const colonIndex = innerPlaceholder.indexOf(':');
-    const filePath = colonIndex > -1 ? innerPlaceholder.substring(0, colonIndex) : innerPlaceholder;
-    const optionsString = colonIndex > -1 ? innerPlaceholder.substring(colonIndex + 1) : '';
+function formatFileContent(relativePath: string, content: string, modIndicator: string = ''): string {
+    return `===== ${path.normalize(relativePath)}${modIndicator} =====\n${content}\n\n`;
+}
 
-    let ignorePatterns: string[] = [];
-    let isDir = false;
-    let isClean = false;
-    let isEval = false;
-    let isRemoveImports = false; // Initialize flag
 
-    if (optionsString) {
-        const options = optionsString.split(',').map(p => p.trim());
-        const remainingOptions: string[] = [];
+const KNOWN_OPTIONS = ['dir', 'eval', 'clean', 'remove-imports'];
+const PRIMARY_OPTIONS: PlaceholderType[] = ['dir', 'eval'];
 
-        for (const option of options) {
-            if (option === 'dir') {
-                isDir = true;
-            } else if (option === 'clean') {
-                isClean = true;
-            } else if (option === 'eval') {
-                isEval = true;
-            } else if (option === 'remove-imports') { // Check for new option
-                isRemoveImports = true;
-            } else {
-                // Assume anything else is an ignore pattern
-                remainingOptions.push(option);
+
+function parsePlaceholder(placeholder: string, warnings: string[]): PlaceholderNode {
+    const original = placeholder;
+    const inner = placeholder.slice(3, -2);
+    let resource = inner;
+    let optionsStr = '';
+
+    const lastColonIndex = inner.lastIndexOf(':');
+    if (lastColonIndex > 0 && (inner.indexOf('://') === -1 || lastColonIndex > inner.indexOf('://') + 2)) {
+        resource = inner.substring(0, lastColonIndex);
+        optionsStr = inner.substring(lastColonIndex + 1);
+    }
+
+    const isWebUrl = resource.startsWith('http://') || resource.startsWith('https://');
+    const options: PlaceholderOptions = {
+        type: isWebUrl ? 'web' : 'file',
+        isClean: false,
+        isRemoveImports: false,
+        ignorePatterns: [],
+    };
+
+    const parsedOpts = optionsStr.split(',').map(p => p.trim()).filter(Boolean);
+    let primaryOpt: PlaceholderType | null = null;
+
+    for (const opt of parsedOpts) {
+        if (KNOWN_OPTIONS.includes(opt)) {
+            if (PRIMARY_OPTIONS.includes(opt as PlaceholderType)) {
+                if (primaryOpt) {
+                    warnings.push(`Warning: Multiple primary options (e.g., dir, eval) in "${original}". Using '${primaryOpt}'.`);
+                } else {
+                    primaryOpt = opt as PlaceholderType;
+                    options.type = primaryOpt;
+                }
+            } else if (opt === 'clean') {
+                options.isClean = true;
+            } else if (opt === 'remove-imports') {
+                options.isRemoveImports = true;
+            }
+        } else if (opt.startsWith('-') || opt.includes('*')) {
+            options.ignorePatterns.push(opt);
+        } else {
+            const a = lev(opt, 'remove-imports')
+            const b = lev(opt, 'dir')
+            const c = lev(opt, 'eval')
+            const d = lev(opt, 'clean')
+
+            const distances = {
+                'remove-imports': a,
+                'dir': b,
+                'eval': c,
+                'clean': d
+            }
+
+            const bestMatch = Object.entries(distances).reduce((a, b) => a[1] < b[1] ? a : b);
+
+            let suggestion = '';
+            if (bestMatch[1] <= 2) {
+                suggestion = ` Did you mean ':${bestMatch[0]}'?`;
+            }
+            warnings.push(`Warning: Unknown option ':${opt}' in "${original}". Ignoring.${suggestion}`);
+        }
+    }
+
+    if (isWebUrl && (options.type === 'dir' || options.type === 'eval')) {
+        warnings.push(`Warning: Option ':${options.type}' is not applicable to URLs in "${original}". Treating as a web request.`);
+        options.type = 'web';
+    }
+    if (options.type === 'dir' || options.type === 'eval') {
+        if (options.isClean) warnings.push(`Warning: ':clean' is ignored with ':${options.type}' in "${original}".`);
+        if (options.isRemoveImports) warnings.push(`Warning: ':remove-imports' is ignored with ':${options.type}' in "${original}".`);
+        options.isClean = false;
+        options.isRemoveImports = false;
+    }
+
+    return {type: 'placeholder', original, resource, options};
+}
+
+/**
+ * Parses the entire template string into a sequence of Text and Placeholder nodes.
+ */
+function parseTemplateToAST(template: string, warnings: string[]): TemplateNode[] {
+    const ignoreBelowMarker = '{{!IGNORE_BELOW}}';
+    const ignoreBelowIndex = template.indexOf(ignoreBelowMarker);
+    if (ignoreBelowIndex !== -1) {
+        template = template.substring(0, ignoreBelowIndex);
+    }
+    template = template.replace(/{{![\s\S]*?}}/g, '');
+
+    const regex = /({{@(?:.*?)}})/g;
+    const parts = template.split(regex);
+    const ast: TemplateNode[] = [];
+
+    for (const part of parts) {
+        if (part.startsWith('{{@') && part.endsWith('}}')) {
+            if (part.length > 5) {
+                ast.push(parsePlaceholder(part, warnings));
+            }
+        } else if (part) {
+            ast.push({type: 'text', content: part});
+        }
+    }
+    return ast;
+}
+
+
+async function processNode(
+    node: TemplateNode,
+    basePath: string,
+    warnings: string[],
+    globalExclude?: string
+): Promise<{ content: string; includedFiles: { [key: string]: number }, tokens: number }> {
+    if (node.type === 'text') {
+        const tokenCount = countTokens(node.content);
+        return {content: node.content, includedFiles: {}, tokens: tokenCount};
+    }
+
+    const {resource, options} = node;
+    let content = '';
+    let includedFiles: { [key: string]: number } = {};
+    let tokens = 0;
+
+    try {
+        switch (options.type) {
+            case 'web': {
+                const webContent = await fetchWebPageContent(resource);
+                content = options.isClean ? webContent : `===== ${resource} =====\n${webContent}\n\n`;
+                tokens = countTokens(content);
+                includedFiles[`${resource} (web page${options.isClean ? ', clean' : ''})`] = tokens;
+                break;
+            }
+            case 'dir': {
+                const absolutePath = path.resolve(basePath, resource);
+                const treeContent = await generateDirectoryTree(absolutePath, options.ignorePatterns);
+                content = `===== Directory Structure: ${resource} =====\n${treeContent}\n\n`;
+                tokens = countTokens(content);
+                includedFiles[`${resource} (directory tree)`] = tokens;
+                break;
+            }
+            case 'eval': {
+                const absolutePath = path.resolve(basePath, resource);
+                const templateToEval = await fs.readFile(absolutePath, 'utf-8');
+                const evalBasePath = path.dirname(absolutePath);
+                const evalResult = await processPromptTemplate(templateToEval.normalize('NFC'), evalBasePath, warnings, globalExclude);
+
+                content = evalResult.content;
+                tokens = evalResult.totalTokens;
+                Object.entries(evalResult.includedFiles).forEach(([key, value]) => {
+                    includedFiles[`eval:${resource}:${key}`] = value;
+                });
+                break;
+            }
+            case 'file': {
+                const absolutePath = path.resolve(basePath, resource);
+                const pathResult = await processPath(absolutePath, options.ignorePatterns, globalExclude, basePath);
+                warnings.push(...pathResult.warnings);
+
+                if (pathResult.files.length === 0) throw new Error(`Path [${resource}] not found or yielded no files.`);
+
+                let concatenatedContent = '';
+                let totalNodeTokens = 0;
+
+                for (const file of pathResult.files) {
+                    let fileContent = file.content.normalize('NFC');
+                    let modIndicator = '';
+                    if (options.isRemoveImports) {
+                        const originalContent = fileContent;
+                        fileContent = removeImportsFromFile(fileContent, file.fullPath);
+                        if (fileContent !== originalContent) {
+                            modIndicator = ' (imports removed)';
+                        }
+                    }
+
+                    // Step 2: Handle formatting (clean or with header)
+                    let finalFileRepresentation: string;
+                    let includedFileKey: string;
+
+                    if (options.isClean) {
+                        finalFileRepresentation = fileContent;
+                        includedFileKey = `${file.relativePath} (clean${modIndicator})`;
+                    } else {
+                        finalFileRepresentation = formatFileContent(file.relativePath, fileContent, modIndicator);
+                        includedFileKey = `${file.relativePath}${modIndicator}`;
+                    }
+
+                    // Step 3: Accumulate content and tokens for this node
+                    const fileTokens = countTokens(finalFileRepresentation);
+                    concatenatedContent += finalFileRepresentation;
+                    totalNodeTokens += fileTokens;
+                    includedFiles[includedFileKey] = fileTokens;
+                }
+
+                content = concatenatedContent;
+                tokens = totalNodeTokens;
+                break;
             }
         }
-        ignorePatterns = remainingOptions;
+    } catch (error: any) {
+        warnings.push(`Warning: Error processing placeholder "${node.original}": ${error.message}`);
+        content = `[Error processing placeholder: ${resource} - ${error.message}]\n`;
+        tokens = countTokens(content);
     }
 
-    const primaryOptions = [];
-    if (isDir) primaryOptions.push('dir');
-    if (isEval) primaryOptions.push('eval');
-    if (primaryOptions.length > 1) {
-        console.warn(`Warning: Multiple incompatible primary options (${primaryOptions.join(', ')}) specified for placeholder "${placeholder}". Prioritizing ${primaryOptions[0]}.`);
-        if (primaryOptions[0] === 'dir') isEval = false;
-    }
-    if ((isDir || isEval) && isRemoveImports) {
-        warnings.push(`Warning: ':remove-imports' cannot be used with ':dir' or ':eval' in placeholder "${placeholder}". Ignoring ':remove-imports'.`);
-        isRemoveImports = false;
-    }
-    if ((isDir || isEval) && isClean) {
-        warnings.push(`Warning: ':clean' cannot be used with ':dir' or ':eval' in placeholder "${placeholder}". Ignoring ':clean'.`);
-        isClean = false;
-    }
-
-    if (isDir) {
-        isEval = false;
-        isClean = false;
-        isRemoveImports = false;
-    } else if (isEval) {
-        isClean = false;
-        isRemoveImports = false;
-    }
-
-    return {filePath, ignorePatterns, isDir, isClean, isEval, isRemoveImports}; // Return new flag
+    return {content, includedFiles, tokens};
 }
+
 
 export async function processPromptFile(promptFilePath: string, globalExclude?: string): Promise<ProcessResult> {
     const content = await fs.readFile(promptFilePath, 'utf-8');
@@ -118,166 +288,42 @@ export async function processPromptFile(promptFilePath: string, globalExclude?: 
     return {...result, warnings};
 }
 
-function findPlaceholders(template: string): Array<{ placeholder: string; index: number }> {
-    const regex = /{{@(.*?)}}/g;
-    const placeholders = [];
-    let match;
-
-    while ((match = regex.exec(template)) !== null) {
-        placeholders.push({placeholder: match[0], index: match.index});
-    }
-
-    // Sort by index to process in order
-    placeholders.sort((a, b) => a.index - b.index);
-    return placeholders;
-}
-
 async function processPromptTemplate(template: string, basePath: string, warnings: string[], globalExclude?: string): Promise<ProcessResult> {
-    const placeholders = findPlaceholders(template);
-    let processedContent = template;
-    const includedFiles: { [filePath: string]: number } = {};
-    let accumulatedOffset = 0;
+    const ast = parseTemplateToAST(template, warnings);
 
-    for (const placeholderMatch of placeholders) {
-        const {placeholder, index} = placeholderMatch;
-        const {
-            filePath,
-            ignorePatterns,
-            isDir,
-            isClean,
-            isEval,
-            isRemoveImports
-        } = parsePlaceholder(placeholder, warnings);
-        const normalizedPath = path.normalize(path.resolve(basePath, filePath));
+    let finalContent = '';
+    const allIncludedFiles: { [filePath: string]: number } = {};
+    let totalTokens = 0;
 
-        let replacementText = '';
-        let replacementTokens = 0;
-        const placeholderIncludedFiles: { [key: string]: number } = {};
-
-        try {
-            if (isDir) {
-                const treeContent = await generateDirectoryTree(normalizedPath, ignorePatterns);
-                replacementText = `===== Directory Structure: ${filePath} =====\n${treeContent}\n\n`;
-                replacementTokens = countTokens(replacementText);
-                placeholderIncludedFiles[`${filePath} (directory tree)`] = replacementTokens;
-            } else if (isEval) {
-                try {
-                    const templateContent = await fs.readFile(normalizedPath, 'utf-8');
-
-                    const templateBasePath = path.dirname(normalizedPath);
-                    const evalResult = await processPromptTemplate(
-                        templateContent.normalize('NFC'),
-                        templateBasePath,
-                        warnings,
-                        globalExclude
-                    );
-
-                    replacementText = evalResult.content;
-                    replacementTokens = evalResult.totalTokens;
-
-                    const prefixedIncludedFiles: { [key: string]: number } = {};
-                    for (const [key, value] of Object.entries(evalResult.includedFiles)) {
-                        prefixedIncludedFiles[`eval:${filePath}:${key}`] = value;
-                    }
-                    Object.assign(placeholderIncludedFiles, prefixedIncludedFiles);
-
-
-                } catch (error: any) {
-                    warnings.push(`Warning: Failed to evaluate template ${filePath}: ${error.message}`);
-                    replacementText = `[Error evaluating template: ${filePath}]`;
-                    replacementTokens = countTokens(replacementText);
-                }
-            } else {
-                const pathResult = await processPath(normalizedPath, ignorePatterns, globalExclude, basePath);
-                warnings.push(...pathResult.warnings);
-
-                if (pathResult.files.length === 0) {
-                    throw new Error(`Path [${filePath}] not found or yielded no files after filtering.`);
-                }
-
-                let concatenatedCleanContent = '';
-
-                for (const file of pathResult.files) {
-                    let fileContent = file.content.normalize('NFC');
-                    let modIndicator = '';
-                    if (isRemoveImports) {
-                        const originalContent = fileContent;
-                        fileContent = removeImportsFromFile(fileContent, file.fullPath);
-                        if (fileContent !== originalContent) {
-                            modIndicator = ' (imports removed)';
-                        }
-                    }
-
-                    if (isClean) {
-                        concatenatedCleanContent += fileContent;
-                        placeholderIncludedFiles[`${file.relativePath}${modIndicator} (clean)`] = countTokens(fileContent);
-                    } else {
-                        const formattedContent = formatFileContent(file.relativePath, fileContent, modIndicator);
-                        replacementText += formattedContent;
-                        const fileTokens = countTokens(formattedContent);
-                        placeholderIncludedFiles[`${file.relativePath}${modIndicator}`] = fileTokens;
-                        replacementTokens += fileTokens;
-                    }
-                }
-
-                if (isClean) {
-                    replacementText = concatenatedCleanContent;
-                    replacementTokens = countTokens(replacementText);
-                    if (pathResult.files.length > 1 && isRemoveImports) {
-                        warnings.push(`Warning: Placeholder "${placeholder}" with ':clean' and ':remove-imports' resolved to multiple files. Concatenating raw content after removing imports from applicable files.`);
-                    } else if (pathResult.files.length > 1) {
-                        warnings.push(`Warning: Placeholder "${placeholder}" with ':clean' resolved to multiple files (${pathResult.files.length}). Concatenating raw content.`);
-                    }
-                }
-            }
-
-            const replaceStartIndex = index + accumulatedOffset;
-            processedContent = processedContent.substring(0, replaceStartIndex) + replacementText + processedContent.substring(replaceStartIndex + placeholder.length);
-            accumulatedOffset += replacementText.length - placeholder.length;
-
-            Object.assign(includedFiles, placeholderIncludedFiles);
-
-        } catch (error: any) {
-            const errorMsg = `Warning: Error processing placeholder "${placeholder}" for path "${filePath}": ${error.message || error}`;
-            warnings.push(errorMsg);
-            const errorReplacement = `[Error processing placeholder: ${filePath} - ${error.message || 'Failed'}]\n`;
-            const replaceStartIndex = index + accumulatedOffset;
-            processedContent = processedContent.substring(0, replaceStartIndex) + errorReplacement + processedContent.substring(replaceStartIndex + placeholder.length);
-            accumulatedOffset += errorReplacement.length - placeholder.length;
-        }
+    for (const node of ast) {
+        const result = await processNode(node, basePath, warnings, globalExclude);
+        finalContent += result.content;
+        Object.assign(allIncludedFiles, result.includedFiles);
+        totalTokens += result.tokens;
     }
 
-    const totalTokens = countTokens(processedContent);
-
-    return {content: processedContent, includedFiles, totalTokens, warnings};
+    return {content: finalContent, includedFiles: allIncludedFiles, totalTokens, warnings};
 }
 
-
-async function processPath(pathToProcess: string, ignorePatterns: string[], globalExclude: string | undefined,
+async function processPath(absolutePathToProcess: string, ignorePatterns: string[], globalExclude: string | undefined,
                            templateBasePath: string): Promise<{
     files: Array<{ relativePath: string; content: string; fullPath: string }>;
     warnings: string[];
 }> {
     const warnings: string[] = [];
-    const filteredFiles = await filterFiles({exclude: ignorePatterns.join(',')}, pathToProcess, globalExclude);
-
+    const filteredFiles = await filterFiles({exclude: ignorePatterns.join(',')}, absolutePathToProcess, globalExclude);
     if (filteredFiles === undefined) {
-        throw new Error(`Path [${pathToProcess}] not found.`);
+        throw new Error(`Path [${path.relative(templateBasePath, absolutePathToProcess) || path.basename(absolutePathToProcess)}] not found.`);
     }
-
     if (filteredFiles.length === 0) {
-        throw new Error(`Path [${pathToProcess}] yielded no files after filtering.`);
+        throw new Error(`Path [${path.relative(templateBasePath, absolutePathToProcess) || path.basename(absolutePathToProcess)}] yielded no files after filtering.`);
     }
-
     const filesData: Array<{ relativePath: string; content: string; fullPath: string }> = [];
-
     for (const file of filteredFiles) {
         try {
             const fullPath = path.normalize(file);
             const fileContent = await getFileContentAsText(fullPath);
-
             const relativePath = path.normalize(path.relative(templateBasePath, fullPath));
-
             filesData.push({relativePath, content: fileContent, fullPath});
         } catch (readError: any) {
             const errorMessage = `[Error processing file ${path.basename(file)}: ${readError.message}]`;
@@ -286,22 +332,5 @@ async function processPath(pathToProcess: string, ignorePatterns: string[], glob
             filesData.push({relativePath, content: errorMessage, fullPath: file});
         }
     }
-
-    const successfullyReadFilesCount = filesData.filter(f =>
-        !f.content.startsWith("[Error") &&
-        !f.content.startsWith("[Content of")
-    ).length;
-
-    if (successfullyReadFilesCount === 0 && filteredFiles.length > 0) {
-        // This means all files that were found by filterFiles either couldn't be read
-        // or resulted in a specific error message from getFileContentAsText.
-        // We don't throw an error here, as the content itself will contain the error messages.
-        warnings.push(`Warning: Path [${pathToProcess}] resolved ${filteredFiles.length} file(s), but none could be meaningfully read or all are empty/binary.`);
-    }
-
     return {files: filesData, warnings};
-}
-
-function formatFileContent(relativePath: string, content: string, modIndicator: string = ''): string {
-    return `===== ${path.normalize(relativePath)}${modIndicator} =====\n${content}\n\n`;
 }

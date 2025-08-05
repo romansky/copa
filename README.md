@@ -1,170 +1,154 @@
 <h1 align="center">
     <img width="100" height="100" src="copa.svg" alt="CoPa Logo"><br>
     CoPa: LLM Prompting Templating
-
 </h1>
 
 [![npm version](https://badge.fury.io/js/copa.svg)](https://badge.fury.io/js/copa)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-CoPa is a simple CLI tool for creating structured prompts for Large Language Models (LLMs) using file references. 
-It offers two main functionalities:
+CoPa is a prompt engineering templating language and a lightweight CLI tool for generating structured prompts for Large
+Language Models (LLMs) by dynamically including content from local files and web pages.
 
-1. Processing LLM prompt templates with file references
-2. Copying file contents in an LLM-friendly format
+It helps you create complex, repeatable, and maintainable prompts for any code-related task.
 
-## Key Features
+## 🔧 Key Features
 
-- Process template files with dynamic file references
-- Copy an entire folder or a single file to clipboard in a LLM friendly format
-- Support for Git repositories and respect for `.gitignore`
-- Built-in token counting
-- Easy-to-use CLI utility
-- Inline ignore patterns for fine-grained control over included files
+* Templated Prompts: Use `{{@path_or_url[:options]}}` syntax to embed content.
+* Web Content Fetching: Directly include content from URLs with `{{@https://...}}`.
+* Ignore Syntax: Use `{{! comment }}` for comments and `{{!IGNORE_BELOW}}` to exclude sections of your template.
+* Directory Trees: Display folder structures with the `:dir` option.
+* Code Cleaning: Strip `import`/`require` statements from JS/TS files with `:remove-imports`.
+* Fine-grained Control: Use inline glob patterns to exclude specific files (e.g., `{{@src:-*.test.js}}`).
+* Nested Templates: Compose prompts from smaller parts using the `:eval` option.
+* Git-aware: Automatically respects your `.gitignore` file.
+* Built-in Token Counting: Helps you stay within your model's context limit.
+* Simple CLI: Use `npx copa` for instant use without installation.
 
 ## Usage
 
 Use CoPa directly with `npx` (recommended) or install it globally.
 
-### Using `npx` (Recommended)
-
-Process a template file:
+Process a template file and copy the result to your clipboard:
 
 ```sh
 npx copa t prompt.copa
 ```
 
-### Global Installation (Alternative)
+See the [Commands](#commands) section for more options, like printing to stdout.
 
-Install CoPa globally:
+## Template Syntax by Example
 
-```sh
-npm install -g copa
-# or yarn
-yarn global add copa
-```
+Create a template file (e.g., `prompt.copa`). CoPa processes placeholders and copies the final prompt to your clipboard.
 
-Then use it as:
-
-```sh
-copa t prompt.copa
-```
-
-## Template Syntax
-
-Create a template file (e.g., `prompt.copa`) using `{{@filepath}}` to reference files or directories:
+#### Example `prompt.copa`:
 
 ````
-Analyze this code:
+{{! This is a comment. It will be removed from the final output. }}
+Analyze the following code:
+
 ```
 {{@src/main.js}}
 ```
 
-And its test:
+Tests, excluding bulky snapshot files:
+
 ```
-{{@tests/main.test.js}}
+{{@tests:-*.snap}}
 ```
 
-Review the entire 'utils' directory:
+Main application logic, I've removed the import statements to save space.
+
 ```
-{{@utils}}
+{{@src/main.ts:remove-imports}}
 ```
 
-Review the 'src' directory, excluding .test.js files:
+Here is the configuration file:
+
 ```
-{{@src:-*.test.js}}
+{{@config.json:clean}}
 ```
 
-Review all files in the current directory, excluding markdown files and the 'subdir' directory:
+The project structure looks like this (excluding build artifacts, in case they are not in .gitignore):
+
 ```
-{{@.:-*.md,-**/subdir/**}}
+{{@.:dir,-dist,-node_modules}}
 ```
 
-[new feature description / instructions for the LLM]
+Finally, here's some external context from a URL:
+
+```
+{{@https://raw.githubusercontent.com/microsoft/TypeScript/main/README.md:clean}}
+```
+
+{{! The next part of the prompt is complex, so I've put it in its own file. }}
+
+```
+{{@./copa/review-utils.copa:eval}}
+```
+
+{{!IGNORE_BELOW}}
+This text and any placeholders below it will be ignored.
+Use it for notes or scratchpad work.
+{{@some/other/file.js}} << this will not be rendered
 ````
 
-Process the template and copy to clipboard:
+## Placeholder Options
 
-```sh
-copa template prompt.copa
-# or use the short alias
-copa t prompt.copa
-```
+Format: `{{@resource:option1,option2}}`
 
-## Inline Ignore Patterns
-
-You can use inline ignore patterns to exclude specific files or patterns within a directory reference:
-
-```
-{{@directory:-pattern1,-pattern2,...}}
-```
-
-Examples:
-- `{{@src:-*.test.js}}` includes all files in the 'src' directory except for files ending with '.test.js'
-- `{{@.:-*.md,-**/subdir/**}}` includes all files in the current directory, excluding markdown files and the 'subdir' directory
-- `{{@.:-**/*dir/**,-*.y*}}` excludes all files in any directory ending with 'dir' and all files with extensions starting with 'y'
-
-Ignore patterns support:
-- File extensions: `-*.js`
-- Specific files: `-file.txt`
-- Directories: `-**/dirname/**`
-- Glob patterns: `-**/*.test.js`
-- Hidden files and directories: `-.*`
+| Option            | Description                                                                                                 | Example                          |
+|-------------------|-------------------------------------------------------------------------------------------------------------|----------------------------------|
+| File/Web Options  |                                                                                                             |                                  |
+| `:clean`          | Includes the raw content of a file or URL without the `===== path =====` header.                            | `{{@src/main.js:clean}}`         |
+| `:remove-imports` | Removes `import` statements from TypeScript/JavaScript files to save tokens. Can be combined with `:clean`. | `{{@src/api.ts:remove-imports}}` |
+| Path Options      |                                                                                                             |                                  |
+| `:dir`            | Lists the directory structure as a tree instead of including file contents.                                 | `{{@src:dir}}`                   |
+| `:eval`           | Processes another template file and injects its output. Useful for reusing prompt components.               | `{{@./copa/sub-task.copa:eval}}` |
+| Ignore Patterns   |                                                                                                             |                                  |
+| `-pattern`        | Excludes files or directories matching the pattern. Supports glob syntax.                                   | `{{@src:-*.test.ts,-config.js}}` |
 
 ## Commands
 
 - `t, template <file>`: Process a template file and copy to clipboard
-  - Option: `-v, --verbose` (Display detailed file and token information)
+    - Option: `-v, --verbose` (Display detailed file and token information)
 
 - `to <file>`: Process a template file and output to stdout
-  - Options:
-    - `-err, --errors` (Output only errors like missing files, empty string if none)
-    - `-t, --tokens` (Output only the token count)
-    - `-v, --verbose` (Display detailed file and token information to stderr)
+    - Options:
+        - `-err, --errors` (Output only errors like missing files, empty string if none)
+        - `-t, --tokens` (Output only the token count)
+        - `-v, --verbose` (Display detailed file and token information to stderr)
 
 - `c, copy [directory]`: Copy files to clipboard (legacy mode)
-  - Options:
-    - `-ex, --exclude <extensions>` (Exclude file types)
-    - `-v, --verbose` (List copied files)
-    - `-f, --file <filePath>` (Copy a single file)
+    - Options:
+        - `-ex, --exclude <extensions>` (Exclude file types)
+        - `-v, --verbose` (List copied files)
+        - `-f, --file <filePath>` (Copy a single file)
 
-## Output Format
+## 🧠 Common Use Cases
 
-CoPa uses a format that's easy for LLMs to understand:
-
-````
-Analyze this code:
-```
-===== src/main.js =====
-File contents here...
-```
-
-And its test:
-```
-===== tests/main.test.js =====
-...
-````
-
-## Use Cases
-
-- Control over what's included in a prompt
-- Repeatable complex prompts with complex file imports
-- Sharing project wide prompt templates
-- Any task requiring code context from multiple files
+- Creating repeatable prompts with consistent file context.
+- Fine-grained control over included source files and directories.
+- Self-documenting prompts where comments and notes are stripped before processing.
+- Fetching and embedding live documentation or examples from web pages.
+- Focusing LLMs on core logic by stripping boilerplate `import` statements.
+- Sharing prompt templates across a team to standardize common tasks like code reviews or bug analysis.
 
 ## Tips
 
-1. Use relative paths in templates for better portability
-2. Create a "prompts" directory in project root
-3. Create a library of templates for common tasks
-4. Use inline ignore patterns for fine-grained control over included files
+1. Use relative paths in templates for better portability across machines.
+2. Create a `copa/` directory in your project root to organize your templates.
+3. Use `:eval` to build a library of reusable sub-prompts for common tasks (e.g., `code-review.copa`,
+   `docs-generation.copa`).
+4. Use `{{! IGNORE_BELOW }}` to keep draft instructions or notes in your template file without sending them to the LLM.
+5. For data files like `package.json`, use `:clean` to provide raw content without the file header.
 
 ## Global Configuration
 
-Create `~/.copa` to set default exclude patterns:
+Create `~/.copa` to set default exclude patterns that apply to all commands:
 
 ```
-ignore: jpg,png,gif
+# Lines starting with # are comments
+ignore: .DS_Store,*.log,jpg,png,gif
 ```
 
 ## Contributing

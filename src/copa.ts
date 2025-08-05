@@ -6,10 +6,11 @@ import {encoding_for_model} from '@dqbd/tiktoken';
 import {Options} from "./options";
 import {readGlobalConfig} from "./readGlobalConfig";
 import {filterFiles} from "./filterFiles";
-import {processPromptFile} from './promptProcessor';
+
 import path from "path";
 import {copyToClipboard} from "./copyToClipboard";
 import { getFileContentAsText } from './fileReader';
+import {processPromptFile} from "./promptProcessor";
 
 function countTokens(input: string): number {
     const tokenize = encoding_for_model('gpt-4');
