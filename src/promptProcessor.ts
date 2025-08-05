@@ -247,7 +247,6 @@ async function processNode(
                         }
                     }
 
-                    // Step 2: Handle formatting (clean or with header)
                     let finalFileRepresentation: string;
                     let includedFileKey: string;
 
@@ -259,7 +258,6 @@ async function processNode(
                         includedFileKey = `${file.relativePath}${modIndicator}`;
                     }
 
-                    // Step 3: Accumulate content and tokens for this node
                     const fileTokens = countTokens(finalFileRepresentation);
                     concatenatedContent += finalFileRepresentation;
                     totalNodeTokens += fileTokens;

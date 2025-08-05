@@ -7,7 +7,7 @@ import fs from "fs/promises";
 
 async function fileExists(filePath: string): Promise<boolean> {
     try {
-        await fs.access(filePath);  // Check if file exists
+        await fs.access(filePath);
         return true;
     } catch (error) {
         return false;
@@ -60,7 +60,6 @@ export async function filterFiles(options: Options, pathToProcess: string, globa
                 } else if (pattern.includes('*') || pattern.includes('/')) {
                     return minimatch(file, pattern, {dot: true, matchBase: true});
                 } else {
-                    // Check if it's an exact file match or exact extension match
                     const fileName = path.basename(file);
                     return fileName === pattern ||
                         (pattern.startsWith('.') && pattern === path.extname(file));

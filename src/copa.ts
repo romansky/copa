@@ -36,13 +36,6 @@ async function copyFilesToClipboard(source: {
             const filtered = await filterFiles(options, source.directory, globalExclude);
             filesToProcess = filtered ?? [];
         } else if (source.filePaths && source.filePaths.length > 0) {
-            // For explicitly listed files, we don't run them through the full filterFiles logic again
-            // as they are already resolved paths. We assume they are wanted.
-            // However, filterFiles does gitignore checking, which might be desired.
-            // For now, let's assume direct file paths bypass complex filtering but respect global/inline excludes.
-            // A simpler check might be needed if globalExclude should apply to direct files.
-            // For simplicity, if filePaths are given, we process them directly.
-            // Re-evaluating: filterFiles can take a single file path. Let's use it for consistency.
             const resolvedFiles = [];
             for (const fp of source.filePaths) {
                 const filtered = await filterFiles(options, fp, globalExclude);
@@ -63,21 +56,17 @@ async function copyFilesToClipboard(source: {
 
         for (const file of filesToProcess) {
             try {
-                // --- MODIFIED PART ---
-                const fileContent = await getFileContentAsText(file); // Use the new utility
-                // --- END MODIFIED PART ---
+                const fileContent = await getFileContentAsText(file);
 
                 const fileSection = `===== ${file} =====\n${fileContent}\n\n`;
                 content += fileSection;
                 tokensPerFile[file] = countTokens(fileSection);
                 totalTokens += tokensPerFile[file];
             } catch (error: any) {
-                // This catch is a fallback. getFileContentAsText should handle most read/parse errors.
                 console.error(`Error processing file ${file} for copy:`, error.message);
                 const errorMsg = `[Error processing file ${path.basename(file)}: ${error.message}]`;
                 const errorSection = `===== ${file} =====\n${errorMsg}\n\n`;
                 content += errorSection;
-                // Still count tokens for the error message part
                 const errorTokens = countTokens(errorSection);
                 tokensPerFile[file] = errorTokens;
                 totalTokens += errorTokens;
@@ -133,20 +122,16 @@ async function handleTemplateCommand(file: string, options: { verbose?: boolean 
 
 async function handleCopyCommand(directory: string | undefined, options: Options) {
     if (options.file && options.file.length > 0) {
-        // Use the provided file paths
         const normalizedPaths = options.file.map(f => path.normalize(path.resolve(f)));
         await copyFilesToClipboard({filePaths: normalizedPaths}, options);
     } else if (directory) {
         const fullPath = path.resolve(directory);
 
-        // Check if the provided directory is actually a file
         try {
             const stats = await fs.stat(fullPath);
             if (stats.isFile()) {
-                // Treat it as a single file, not a directory
                 await copyFilesToClipboard({filePaths: [fullPath]}, options);
             } else if (stats.isDirectory()) {
-                // It's a directory
                 console.log(`Copying files from ${path.normalize(directory)}`);
                 await copyFilesToClipboard({directory: fullPath}, options);
             } else {
@@ -174,21 +159,16 @@ async function handleToCommand(file: string, options: { errors?: boolean, tokens
         } = await processPromptFile(path.resolve(file), globalExclude);
 
         if (options.errors) {
-            // Output only errors
             if (warnings.length > 0) {
                 console.log(warnings.join('\n'));
             } else {
                 console.log('');
             }
         } else if (options.tokens) {
-            // Output only token count
             console.log(totalTokens);
         } else {
-            // Output the rendered content
             console.log(content);
 
-            // If verbose, also output additional information to stderr
-            // so it doesn't interfere with piping the main output
             if (options.verbose) {
                 console.error(`\nProcessed template from ${file}`);
                 console.error(`Total tokens: ${totalTokens}`);
@@ -215,20 +195,20 @@ async function handleToCommand(file: string, options: { errors?: boolean, tokens
 
 program
     .name('copa')
-    .description('CoPa: Copy File Sources For Prompting and LLM Template Processing')
-    .version('1.0.0');
+    .description('CoPa: Prompt Engineering Templating Language and CLI Tool ')
+    .version('1.4.0');
 
 program
     .command('template <file>')
     .alias('t')
-    .description('Process an LLM prompt template file and copy to clipboard')
+    .description('Process `.copa` template file and copy to clipboard')
     .option('-v, --verbose', 'Display detailed information about processed files and token counts')
     .action(handleTemplateCommand);
 
 program
     .command('copy [directory]')
     .alias('c')
-    .description('Copy files from a directory or a single file to the clipboard (legacy mode)')
+    .description('Copy files from a directory or a single file to the clipboard')
     .option('-ex, --exclude <extensions>', 'Comma-separated list of file extensions to exclude (in addition to global config)')
     .option('-v, --verbose', 'Display the list of copied files')
     .option('-f, --file <filePath>', 'Path to a single file to copy', (value, previous: string[]) => previous.concat([value]), [])
@@ -236,7 +216,7 @@ program
 
 program
     .command('to <file>')
-    .description('Process a template file and output to stdout instead of clipboard')
+    .description('Process a template file and output to stdout')
     .option('-err, --errors', 'Output only errors (like missing files)')
     .option('-t, --tokens', 'Output only the token count')
     .option('-v, --verbose', 'Display detailed information about processed files and token counts')

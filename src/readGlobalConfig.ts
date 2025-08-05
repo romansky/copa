@@ -11,7 +11,6 @@ export async function readGlobalConfig(): Promise<string> {
             return ignoreLine.split(':')[1].trim();
         }
     } catch (error) {
-        // If the file doesn't exist or can't be read, return an empty string
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
             console.warn('Warning: Unable to read global config file:', error);
         }

@@ -1,7 +1,7 @@
 {
   "name": "copa",
   "version": "1.4.0",
-  "description": "CoPa: Copy File Sources For Prompting and LLM Template Processing",
+  "description": "CoPa: Prompt Engineering Templating Language and CLI Tool",
   "type": "commonjs",
   "main": "./dist/copa.js",
   "bin": "./dist/copa.js",
