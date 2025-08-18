@@ -20,20 +20,47 @@ interface TextNode {
     content: string;
 }
 
+interface FenceNode {
+    type: 'fence';
+    content: string;
+}
+
 interface PlaceholderNode {
     type: 'placeholder';
     original: string; // "{{@path/to/file:clean}}"
     resource: string; // "path/to/file" or "https://..."
     options: PlaceholderOptions;
+    fenced?: boolean; // NEW: true when written as {{{ @... }}}
 }
 
-type TemplateNode = TextNode | PlaceholderNode;
+type TemplateNode = TextNode | PlaceholderNode | FenceNode;
 
 interface ProcessResult {
     content: string;
     warnings: string[];
     includedFiles: { [filePath: string]: number };
     totalTokens: number;
+}
+
+function longestBacktickRun(s: string): number {
+    let max = 0, cur = 0;
+    for (let i = 0; i < s.length; i++) {
+        if (s[i] === '`') {
+            cur++;
+            if (cur > max) max = cur;
+        } else {
+            cur = 0;
+        }
+    }
+    return max;
+}
+
+function toFencedBlock(body: string): string {
+    const normalized = body.normalize('NFC');
+    const fenceLen = Math.max(3, longestBacktickRun(normalized) + 1);
+    const fence = '`'.repeat(fenceLen);
+    const withNewline = normalized.endsWith('\n') ? normalized : normalized + '\n';
+    return `${fence}\n${withNewline}${fence}\n\n`;
 }
 
 async function fetchWebPageContent(url: string): Promise<string> {
@@ -152,9 +179,6 @@ function parsePlaceholder(placeholder: string, warnings: string[]): PlaceholderN
     return {type: 'placeholder', original, resource, options};
 }
 
-/**
- * Parses the entire template string into a sequence of Text and Placeholder nodes.
- */
 function parseTemplateToAST(template: string, warnings: string[]): TemplateNode[] {
     const ignoreBelowMarker = '{{!IGNORE_BELOW}}';
     const ignoreBelowIndex = template.indexOf(ignoreBelowMarker);
@@ -163,16 +187,34 @@ function parseTemplateToAST(template: string, warnings: string[]): TemplateNode[
     }
     template = template.replace(/{{![\s\S]*?}}/g, '');
 
-    const regex = /({{@(?:.*?)}})/g;
+    // Capture:
+    // - fence blocks: {{{ ... }}} (multiline)
+    // - placeholders: {{@ ... }} (single line)
+    const regex = /({{{[\s\S]*?}}}|{{@(?:.*?)}})/g;
     const parts = template.split(regex);
     const ast: TemplateNode[] = [];
 
     for (const part of parts) {
-        if (part.startsWith('{{@') && part.endsWith('}}')) {
+        if (!part) continue;
+
+        if (part.startsWith('{{{') && part.endsWith('}}}')) {
+            const inner = part.slice(3, -3);
+            const trimmed = inner.trim();
+
+            // NEW: triple-brace placeholder sugar {{{ @... }}}
+            if (trimmed.startsWith('@')) {
+                // Reuse the existing placeholder parser
+                const ph = parsePlaceholder(`{{${trimmed}}}`, warnings);
+                ph.fenced = true;
+                ast.push(ph);
+            } else {
+                ast.push({type: 'fence', content: inner});
+            }
+        } else if (part.startsWith('{{@') && part.endsWith('}}')) {
             if (part.length > 5) {
                 ast.push(parsePlaceholder(part, warnings));
             }
-        } else if (part) {
+        } else {
             ast.push({type: 'text', content: part});
         }
     }
@@ -189,6 +231,24 @@ async function processNode(
     if (node.type === 'text') {
         const tokenCount = countTokens(node.content);
         return {content: node.content, includedFiles: {}, tokens: tokenCount};
+    }
+
+    if (node.type === 'fence') {
+        const inner = await processPromptTemplate(
+            node.content.normalize('NFC'),
+            basePath,
+            warnings,
+            globalExclude
+        );
+
+        const fenced = toFencedBlock(inner.content);
+
+        const includedFiles: { [key: string]: number } = {};
+        for (const [k, v] of Object.entries(inner.includedFiles)) {
+            includedFiles[`fence:${k}`] = v;
+        }
+
+        return {content: fenced, includedFiles, tokens: countTokens(fenced)};
     }
 
     const {resource, options} = node;
@@ -273,6 +333,20 @@ async function processNode(
         warnings.push(`Warning: Error processing placeholder "${node.original}": ${error.message}`);
         content = `[Error processing placeholder: ${resource} - ${error.message}]\n`;
         tokens = countTokens(content);
+    }
+
+    if (node.fenced) {
+        const fenced = toFencedBlock(content);
+
+        // For consistency with regular fence nodes, prefix included file keys
+        const prefixed: { [key: string]: number } = {};
+        for (const [k, v] of Object.entries(includedFiles)) {
+            prefixed[`fence:${k}`] = v;
+        }
+
+        content = fenced;
+        tokens = countTokens(fenced);
+        includedFiles = prefixed;
     }
 
     return {content, includedFiles, tokens};

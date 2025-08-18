@@ -6,7 +6,7 @@ import {describe, beforeEach, afterEach, expect, test} from 'vitest'
 import {encoding_for_model} from "@dqbd/tiktoken";
 import {processPromptFile} from "../src/promptProcessor";
 
-describe('Prompt Processor with Ignore Patterns', () => {
+describe('Prompt Processor', () => {
     let testDir: string;
 
     const cleanPath = (path: string) => path.replace(testDir + '/', '');
@@ -207,6 +207,50 @@ describe('Prompt Processor with Ignore Patterns', () => {
             path.join('subdir', 'file3.txt')
         ].sort());
     });
+
+    test('processes a prompt file with single file reference inside fenced block', async () => {
+        const promptContent = 'This is a test prompt.\n{{{ {{@file1.js}} {{@file1.js}} }}}End of prompt.';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(result.content).toContain('This is a test prompt.');
+        expect(result.content).toContain('```');
+        expect(result.content).toContain('file1.js =====');
+        expect(result.content).toContain('console.log("Hello");');
+        expect(result.content).toContain('End of prompt.');
+    });
+
+    test('processes a prompt file with single file reference inside auto-fenced block', async () => {
+        const promptContent = 'This is a test prompt.\n {{{@file1.js}}} End of prompt.';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(result.content).toContain('This is a test prompt.');
+        expect(result.content).toContain('```');
+        expect(result.content).toContain('file1.js =====');
+        expect(result.content).toContain('console.log("Hello");');
+        expect(result.content).toContain('End of prompt.');
+    });
+
+    test('processes a prompt file with single file reference inside auto-fenced block with spaces', async () => {
+        const promptContent = 'This is a test prompt.\n {{{ @file1.js }}} End of prompt.';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(result.content).toContain('This is a test prompt.');
+        expect(result.content).toContain('```');
+        expect(result.content).toContain('file1.js =====');
+        expect(result.content).toContain('console.log("Hello");');
+        expect(result.content).toContain('End of prompt.');
+    });
+
+
 
 });
 

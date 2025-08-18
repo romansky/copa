@@ -1,16 +1,25 @@
 I'm working on an OSS project
 
-```
-{{@./snips/about_project.md}}
-```
-
 This is the source:
 
 ```
-{{@../src}}
+{{@../src/promptProcessor.ts}}
 ```
 
-Please help me add support for embedding web pages, the inner location would be:
-`@https://www.example.com/page.html`
+Normally when I add content I use ```{{ ... }}```, so I have to write backticks myself..
+Plus, I need to be aware of how many backticks are in the content (so I have +1).
+What I would like to do is when I write {{{ the library will automatically check the most 
+backticks in the content and surround it with +1, so:
+{{{ ... }}} will translate to (in case there are no three backticks inside)
 
-Just leave a placeholder function with the url as input and expect string as output, I will implement the inside of it..
+```
+injected content
+```
+
+So we added the "fenced block" feature, which works great. Can you help me update the 
+README to include this feature?
+
+
+```
+{{@../README.md}}
+```
