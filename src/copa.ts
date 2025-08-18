@@ -196,7 +196,7 @@ async function handleToCommand(file: string, options: { errors?: boolean, tokens
 program
     .name('copa')
     .description('CoPa: Prompt Engineering Templating Language and CLI Tool ')
-    .version('1.4.0');
+    .version('1.5.1');
 
 program
     .command('template <file>')
