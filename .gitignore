@@ -3,3 +3,6 @@ dist
 .yarn
 version.sh
 .idea
+prompts/*.req
+prompts/*.md
+prompts/*.thinking
