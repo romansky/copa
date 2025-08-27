@@ -39,6 +39,8 @@ function relPosix(fileAbs: string, baseDirAbs: string): string {
 }
 
 export async function filterFiles(options: Options, pathToProcess: string, globalExclude?: string): Promise<string[] | undefined> {
+    const baseDirAbs = path.resolve(pathToProcess);
+
     const userExclude = options.exclude || '';
     const userInclude = options.include || '';
     const combinedExclude = [globalExclude ?? '', userExclude].filter(Boolean).join(',');
@@ -56,35 +58,33 @@ export async function filterFiles(options: Options, pathToProcess: string, globa
     let allFiles: string[];
 
     try {
-        const foundFile = await fileExists(pathToProcess);
+        const foundFile = await fileExists(baseDirAbs);
         if (!foundFile) {
-            console.warn(`The specified path does not exist: ${pathToProcess}`);
+            console.warn(`The specified path does not exist: ${baseDirAbs}`);
             return undefined;
         }
 
-        const stats = await fs.stat(pathToProcess);
+        const stats = await fs.stat(baseDirAbs);
 
         if (stats.isDirectory()) {
-            const git = simpleGit(pathToProcess);
+            const git = simpleGit(baseDirAbs);
             const isGitRepo = await git.checkIsRepo();
 
             if (isGitRepo) {
                 const root = (await git.raw(['rev-parse', '--show-toplevel'])).trim();
-                const relSpec = path.relative(root, pathToProcess) || '.';  // limit to subtree
+                const relSpec = path.relative(root, baseDirAbs) || '.';  // limit to subtree
                 const gitFiles = await git.raw(['ls-files', '-co', '--exclude-standard', '--', relSpec]);
                 const relFiles = gitFiles.split('\n').filter(Boolean);
-                allFiles = relFiles.map(f => path.join(root, f)); // absolute, no duplication
+                allFiles = relFiles.map(f => path.join(root, f));
             } else {
-                const globPattern = toPosix(path.join(pathToProcess, '**', '*'));
+                const globPattern = toPosix(path.join(baseDirAbs, '**', '*'));
                 allFiles = await glob(globPattern, {dot: true, nodir: true});
             }
         } else {
-            allFiles = [pathToProcess];
+            allFiles = [baseDirAbs];
         }
 
-        allFiles = allFiles.map(f => path.resolve(f));
 
-        const baseDirAbs = path.resolve(pathToProcess);
         const filesMeta = allFiles.map(abs => ({
             abs,
             rel: relPosix(abs, baseDirAbs),
