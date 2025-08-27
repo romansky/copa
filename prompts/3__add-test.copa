@@ -5,5 +5,24 @@ Some tests from my project
 ```
 
 As it stands, all tests pass.
-I just added support for including files using "+" notation, can you help me add 
-some tests for this?
+I recently added support for including files using "+" notation.
+
+This seems to work:
+@../:dir,+*.config.ts
+```
+===== Directory Structure: ../ =====
+mcpgate/
+├── packages/
+│   ├── bridge/
+│   │   └── vitest.config.ts
+│   ├── cli/
+│   │   ├── tsup.config.ts
+│   │   └── vitest.config.ts
+│   ├── frontend/
+│   │   └── vite.config.ts
+│   ├── gateway/
+```
+But this returns nothing:
+@../packages:dir,+*.config.ts
+
+Can you help me add a test to reproduce this?

@@ -39,8 +39,8 @@ function relPosix(fileAbs: string, baseDirAbs: string): string {
 }
 
 export async function filterFiles(options: Options, pathToProcess: string, globalExclude?: string): Promise<string[] | undefined> {
-    const baseDirAbs = path.resolve(pathToProcess);
-
+    const baseDirAbsRaw = path.resolve(pathToProcess);
+    const baseDirAbs = await fs.realpath(baseDirAbsRaw).catch(() => baseDirAbsRaw);
     const userExclude = options.exclude || '';
     const userInclude = options.include || '';
     const combinedExclude = [globalExclude ?? '', userExclude].filter(Boolean).join(',');
@@ -67,14 +67,19 @@ export async function filterFiles(options: Options, pathToProcess: string, globa
         const stats = await fs.stat(baseDirAbs);
 
         if (stats.isDirectory()) {
-            const git = simpleGit(baseDirAbs);
-            const isGitRepo = await git.checkIsRepo();
+            const gitAtBase = simpleGit(baseDirAbs);
+            const isGitRepo = await gitAtBase.checkIsRepo();
 
             if (isGitRepo) {
-                const root = (await git.raw(['rev-parse', '--show-toplevel'])).trim();
-                const relSpec = path.relative(root, baseDirAbs) || '.';  // limit to subtree
-                const gitFiles = await git.raw(['ls-files', '-co', '--exclude-standard', '--', relSpec]);
+                const rootRaw = (await gitAtBase.raw(['rev-parse', '--show-toplevel'])).trim();
+                const root = await fs.realpath(rootRaw).catch(() => rootRaw);
+
+                const relSpec = path.relative(root, baseDirAbs) || '.';
+
+                const gitAtRoot = simpleGit(root);
+                const gitFiles = await gitAtRoot.raw(['ls-files', '-co', '--exclude-standard', '--', relSpec]);
                 const relFiles = gitFiles.split('\n').filter(Boolean);
+
                 allFiles = relFiles.map(f => path.join(root, f));
             } else {
                 const globPattern = toPosix(path.join(baseDirAbs, '**', '*'));

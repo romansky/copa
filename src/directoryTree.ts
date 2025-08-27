@@ -14,13 +14,13 @@ export async function generateDirectoryTree(
     includePatterns: string[] = []
 ): Promise<string> {
     try {
-        const stats = await fs.stat(directoryPath);
+        const dirReal = await fs.realpath(directoryPath).catch(() => directoryPath);
+        const stats = await fs.stat(dirReal);
         if (!stats.isDirectory()) {
-            return `Not a directory: ${directoryPath}`;
+            return `Not a directory: ${dirReal}`;
         }
-
-        const rootName = path.basename(directoryPath);
-        const tree = await buildTree(directoryPath, ignorePatterns, includePatterns);
+        const rootName = path.basename(dirReal);
+        const tree = await buildTree(dirReal, ignorePatterns, includePatterns);
         return renderTree(pruneEmptyDirs({
             name: rootName,
             children: tree,

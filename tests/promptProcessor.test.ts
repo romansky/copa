@@ -4,6 +4,10 @@ import * as os from 'os';
 import {filterFiles} from "../src/filterFiles";
 import {describe, beforeEach, afterEach, expect, test} from 'vitest'
 import {processPromptFile} from "../src/promptProcessor";
+import {exec as _exec} from 'child_process';
+import {promisify} from 'util';
+
+const exec = promisify(_exec);
 
 describe('Prompt Processor', () => {
     let testDir: string;
@@ -449,4 +453,38 @@ describe('Directory Tree Feature', () => {
 
         expect(secondResult.content).not.toContain('config.json');
     });
+
+    test('correctly applies inclusion glob on a subdirectory for dir tree', async () => {
+        await fs.mkdir(path.join(testDir, 'packages', 'cli'), {recursive: true});
+        await fs.mkdir(path.join(testDir, 'packages', 'frontend'), {recursive: true});
+
+        await fs.writeFile(path.join(testDir, 'packages', 'cli', 'tsup.config.ts'), '// tsup config');
+        await fs.writeFile(path.join(testDir, 'packages', 'frontend', 'vite.config.ts'), '// vite config');
+
+        await fs.writeFile(path.join(testDir, 'packages', 'cli', 'index.js'), '// main file');
+
+        await fs.writeFile(path.join(testDir, 'root.config.ts'), '// root config');
+
+
+        await exec('git init', { cwd: testDir });
+        await exec('git add .', { cwd: testDir });
+
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, 'Package configs:\n{{@packages:dir,+*.config.ts}}');
+        const result1 = await processPromptFile(promptFile);
+        await fs.writeFile(promptFile, 'Package configs:\n{{@./:dir,+*.config.ts}}');
+        const result2 = await processPromptFile(promptFile);
+
+        expect(result1.content).toContain('Package configs:');
+        expect(result1.content).toContain('===== Directory Structure: packages =====');
+        expect(result1.content).toContain('packages');
+        expect(result1.content).toContain('├── cli/');
+        expect(result1.content).toContain('│   └── tsup.config.ts');
+        expect(result1.content).toContain('└── frontend/');
+        expect(result1.content).toContain('    └── vite.config.ts');
+
+        expect(result1.content).not.toContain('index.js');
+
+        expect(result1.content).not.toContain('root.config.ts');
+    })
 })
