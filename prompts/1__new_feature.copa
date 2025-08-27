@@ -1,16 +1,11 @@
 I'm working on an OSS project
 
 ```
-{{@./snips/about_project.md}}
-```
-
-This is the source:
-
-```
 {{@../src}}
 ```
 
-Please help me add support for generating simple ASCII tree for a given location (assuming its a directory)
+I want to be able to specify positive filters.
 
-For example when I do `@../src:dir`- this will be generated as directory structure instead of contents.
-This is not implemented optimally, when I use `@.:-*.md,-**/subdir/**` its being detected as "dir"...
+Right now I am able to filter out files / folders, but what I want to be able to do:
+
+`@packages:+package.json,+tsconfig.json,+*.json`

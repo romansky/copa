@@ -10,7 +10,8 @@ interface TreeNode {
 
 export async function generateDirectoryTree(
     directoryPath: string,
-    ignorePatterns: string[] = []
+    ignorePatterns: string[] = [],
+    includePatterns: string[] = []
 ): Promise<string> {
     try {
         const stats = await fs.stat(directoryPath);
@@ -19,23 +20,33 @@ export async function generateDirectoryTree(
         }
 
         const rootName = path.basename(directoryPath);
-        const tree = await buildTree(directoryPath, ignorePatterns);
-        return renderTree({
+        const tree = await buildTree(directoryPath, ignorePatterns, includePatterns);
+        return renderTree(pruneEmptyDirs({
             name: rootName,
             children: tree,
             isDirectory: true
-        });
+        }));
     } catch (error) {
         return `Error generating directory tree: ${error}`;
     }
 }
 
+function pruneEmptyDirs(node: TreeNode): TreeNode {
+    if (!node.isDirectory) return node;
+    node.children = node.children
+        .map(pruneEmptyDirs)
+        .filter(c => !c.isDirectory || c.children.length > 0);
+    return node;
+}
+
 async function buildTree(
     dirPath: string,
-    ignorePatterns: string[] = []
+    ignorePatterns: string[] = [],
+    includePatterns: string[] = []
 ): Promise<TreeNode[]> {
     const files = await filterFiles({
-        exclude: ignorePatterns.join(',')
+        exclude: ignorePatterns.join(','),
+        include: includePatterns.join(','),
     }, dirPath);
 
     if (!files) {

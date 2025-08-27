@@ -209,6 +209,7 @@ program
     .command('copy [directory]')
     .alias('c')
     .description('Copy files from a directory or a single file to the clipboard')
+    .option('-in, --include <patterns>', 'Comma-separated list of file patterns to include')
     .option('-ex, --exclude <extensions>', 'Comma-separated list of file extensions to exclude (in addition to global config)')
     .option('-v, --verbose', 'Display the list of copied files')
     .option('-f, --file <filePath>', 'Path to a single file to copy', (value, previous: string[]) => previous.concat([value]), [])

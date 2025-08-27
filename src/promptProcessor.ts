@@ -13,6 +13,7 @@ interface PlaceholderOptions {
     isClean: boolean;
     isRemoveImports: boolean;
     ignorePatterns: string[];
+    includePatterns: string[];
 }
 
 interface TextNode {
@@ -121,6 +122,7 @@ function parsePlaceholder(placeholder: string, warnings: string[]): PlaceholderN
         isClean: false,
         isRemoveImports: false,
         ignorePatterns: [],
+        includePatterns: [],
     };
 
     const parsedOpts = optionsStr.split(',').map(p => p.trim()).filter(Boolean);
@@ -140,6 +142,8 @@ function parsePlaceholder(placeholder: string, warnings: string[]): PlaceholderN
             } else if (opt === 'remove-imports') {
                 options.isRemoveImports = true;
             }
+        } else if (opt.startsWith('+')) {
+            options.includePatterns.push(opt.slice(1));
         } else if (opt.startsWith('-') || opt.includes('*')) {
             options.ignorePatterns.push(opt);
         } else {
@@ -267,7 +271,7 @@ async function processNode(
             }
             case 'dir': {
                 const absolutePath = path.resolve(basePath, resource);
-                const treeContent = await generateDirectoryTree(absolutePath, options.ignorePatterns);
+                const treeContent = await generateDirectoryTree(absolutePath, options.ignorePatterns, options.includePatterns);
                 content = `===== Directory Structure: ${resource} =====\n${treeContent}\n\n`;
                 tokens = countTokens(content);
                 includedFiles[`${resource} (directory tree)`] = tokens;
@@ -288,7 +292,7 @@ async function processNode(
             }
             case 'file': {
                 const absolutePath = path.resolve(basePath, resource);
-                const pathResult = await processPath(absolutePath, options.ignorePatterns, globalExclude, basePath);
+                const pathResult = await processPath(absolutePath, options.ignorePatterns, options.includePatterns, globalExclude, basePath);
                 warnings.push(...pathResult.warnings);
 
                 if (pathResult.files.length === 0) throw new Error(`Path [${resource}] not found or yielded no files.`);
@@ -377,13 +381,16 @@ async function processPromptTemplate(template: string, basePath: string, warning
     return {content: finalContent, includedFiles: allIncludedFiles, totalTokens, warnings};
 }
 
-async function processPath(absolutePathToProcess: string, ignorePatterns: string[], globalExclude: string | undefined,
+async function processPath(absolutePathToProcess: string, ignorePatterns: string[], includePatterns: string[], globalExclude: string | undefined,
                            templateBasePath: string): Promise<{
     files: Array<{ relativePath: string; content: string; fullPath: string }>;
     warnings: string[];
 }> {
     const warnings: string[] = [];
-    const filteredFiles = await filterFiles({exclude: ignorePatterns.join(',')}, absolutePathToProcess, globalExclude);
+    const filteredFiles = await filterFiles({
+        exclude: ignorePatterns.join(','),
+        include: includePatterns.join(',')
+    }, absolutePathToProcess, globalExclude);
     if (filteredFiles === undefined) {
         throw new Error(`Path [${path.relative(templateBasePath, absolutePathToProcess) || path.basename(absolutePathToProcess)}] not found.`);
     }

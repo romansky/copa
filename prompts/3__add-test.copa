@@ -1,0 +1,9 @@
+Some tests from my project
+
+```
+{{@../tests/promptProcessor.test.ts}}
+```
+
+As it stands, all tests pass.
+I just added support for including files using "+" notation, can you help me add 
+some tests for this?

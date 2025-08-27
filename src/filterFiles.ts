@@ -14,13 +14,44 @@ async function fileExists(filePath: string): Promise<boolean> {
     }
 }
 
+
+function toPosix(p: string): string {
+    return p.split(path.sep).join('/');
+}
+
+function cleanPattern(p: string): string {
+    return p.replace(/^([+-])/, '').trim();
+}
+
+function matchesPattern(relPosixPath: string, baseName: string, patternRaw: string): boolean {
+    const pattern = cleanPattern(patternRaw);
+    if (pattern.includes('*') || pattern.includes('/')) {
+        return minimatch(relPosixPath, pattern, {dot: true, matchBase: true});
+    }
+    if (pattern.startsWith('.')) {
+        return path.extname(baseName) === pattern;
+    }
+    return baseName === pattern;
+}
+
+function relPosix(fileAbs: string, baseDirAbs: string): string {
+    return toPosix(path.relative(baseDirAbs, fileAbs));
+}
+
 export async function filterFiles(options: Options, pathToProcess: string, globalExclude?: string): Promise<string[] | undefined> {
     const userExclude = options.exclude || '';
+    const userInclude = options.include || '';
     const combinedExclude = [globalExclude ?? '', userExclude].filter(Boolean).join(',');
-    const excludePatterns = combinedExclude.split(',')
-        .filter(Boolean)
-        .map(exPath => exPath.startsWith('-') ? exPath.slice(1) : exPath);
 
+    const excludePatterns = combinedExclude
+        .split(',')
+        .filter(Boolean)
+        .map(cleanPattern);
+
+    const includePatterns = userInclude
+        .split(',')
+        .filter(Boolean)
+        .map(cleanPattern);
 
     let allFiles: string[];
 
@@ -38,37 +69,46 @@ export async function filterFiles(options: Options, pathToProcess: string, globa
             const isGitRepo = await git.checkIsRepo();
 
             if (isGitRepo) {
-                const gitFiles = await git.raw(['ls-files', '-co', '--exclude-standard', pathToProcess]);
-                allFiles = gitFiles.split('\n').filter(Boolean);
+                const root = (await git.raw(['rev-parse', '--show-toplevel'])).trim();
+                const relSpec = path.relative(root, pathToProcess) || '.';  // limit to subtree
+                const gitFiles = await git.raw(['ls-files', '-co', '--exclude-standard', '--', relSpec]);
+                const relFiles = gitFiles.split('\n').filter(Boolean);
+                allFiles = relFiles.map(f => path.join(root, f)); // absolute, no duplication
             } else {
-                const globPattern = path.join(pathToProcess, '**', '*').replace(/\\/g, '/');
+                const globPattern = toPosix(path.join(pathToProcess, '**', '*'));
                 allFiles = await glob(globPattern, {dot: true, nodir: true});
             }
         } else {
             allFiles = [pathToProcess];
         }
 
+        allFiles = allFiles.map(f => path.resolve(f));
 
-        allFiles = allFiles.map(file => {
-            return path.isAbsolute(file) ? file : path.resolve(pathToProcess, file);
-        });
+        const baseDirAbs = path.resolve(pathToProcess);
+        const filesMeta = allFiles.map(abs => ({
+            abs,
+            rel: relPosix(abs, baseDirAbs),
+            base: path.basename(abs),
+        }));
 
-        return allFiles.filter(file => {
+        let filesToFilter = filesMeta;
+        if (includePatterns.length > 0) {
+            filesToFilter = filesMeta.filter(f =>
+                includePatterns.some(p => matchesPattern(f.rel, f.base, p))
+            );
+        }
+
+        const finalFiles = filesToFilter.filter(f => {
             const isExcluded = excludePatterns.some(pattern => {
                 if (pattern === '.*') {
-                    return file.split(path.sep).some(part => part.startsWith('.'));
-                } else if (pattern.includes('*') || pattern.includes('/')) {
-                    return minimatch(file, pattern, {dot: true, matchBase: true});
-                } else {
-                    const fileName = path.basename(file);
-                    return fileName === pattern ||
-                        (pattern.startsWith('.') && pattern === path.extname(file));
+                    return f.rel.split('/').some(seg => seg.startsWith('.'));
                 }
+                return matchesPattern(f.rel, f.base, pattern);
             });
-            if (isExcluded) {
-            }
             return !isExcluded;
         });
+
+        return finalFiles.map(f => f.abs);
 
     } catch (error: any) {
         throw new Error(`Error listing or filtering files: ${error.message}`);
