@@ -39,8 +39,8 @@ function relPosix(fileAbs: string, baseDirAbs: string): string {
 }
 
 export async function filterFiles(options: Options, pathToProcess: string, globalExclude?: string): Promise<string[] | undefined> {
-    const baseDirAbsRaw = path.resolve(pathToProcess);
-    const baseDirAbs = await fs.realpath(baseDirAbsRaw).catch(() => baseDirAbsRaw);
+    const baseDirAbs = path.resolve(pathToProcess);
+
     const userExclude = options.exclude || '';
     const userInclude = options.include || '';
     const combinedExclude = [globalExclude ?? '', userExclude].filter(Boolean).join(',');
@@ -88,7 +88,6 @@ export async function filterFiles(options: Options, pathToProcess: string, globa
         } else {
             allFiles = [baseDirAbs];
         }
-
 
         const filesMeta = allFiles.map(abs => ({
             abs,
