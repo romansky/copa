@@ -1,6 +1,6 @@
 {
   "name": "copa",
-  "version": "1.7.7",
+  "version": "1.7.8",
   "description": "CoPa: Prompt Engineering Templating Language and CLI Tool",
   "repository": {
     "type": "git",
