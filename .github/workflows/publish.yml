@@ -13,26 +13,21 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [ 20.x ]
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 20
           registry-url: 'https://registry.npmjs.org/'
 
       - run: corepack enable
 
-      - name: Install root project dependencies
-        run: yarn install
+      - name: Install
+        run: yarn install --frozen-lockfile
 
-      - name: Build root project
+      - name: Build
         run: yarn build
 
-      - name: Publish root project to npm
-        run: yarn publish --access public
+      - name: Publish (Trusted Publishing / OIDC)
+        run: npm publish --access public
