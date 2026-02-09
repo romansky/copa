@@ -6,8 +6,8 @@ on:
       - 'v*.*.*'
 
 permissions:
-  contents: read
   id-token: write
+  contents: read
 
 jobs:
   publish:
@@ -18,8 +18,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          registry-url: 'https://registry.npmjs.org/'
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
 
       - run: corepack enable
 
