@@ -11,6 +11,7 @@
   "bin": "./dist/copa.js",
   "scripts": {
     "build": "tsc",
+    "prepack": "npm run build",
     "start": "node dist/copa.js",
     "test": "vitest"
   },

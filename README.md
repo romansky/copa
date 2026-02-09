@@ -144,7 +144,7 @@ Note: When used in a fenced block (`{{{ ... }}}`), the processed result is wrapp
 
 - `to <file>`: Process a template file and output to stdout
     - Options:
-        - `-err, --errors` (Output only errors like missing files, empty string if none)
+        - `--err, --errors` (Output only errors like missing files, empty string if none)
         - `-t, --tokens` (Output only the token count)
         - `-v, --verbose` (Display detailed file and token information to stderr)
 

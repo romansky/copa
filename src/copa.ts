@@ -59,7 +59,7 @@ program
 program
     .command('to <file>')
     .description('Process a template file and output to stdout')
-    .option('-err, --errors', 'Output only errors (like missing files)')
+    .option('--err, --errors', 'Output only errors (like missing files)')
     .option('-t, --tokens', 'Output only the token count')
     .option('-v, --verbose', 'Display detailed information about processed files and token counts')
     .action(handleToCommand);
