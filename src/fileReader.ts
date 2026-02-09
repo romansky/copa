@@ -16,7 +16,7 @@ export async function getFileContentAsText(filePath: string): Promise<string> {
 
     if (officeExtensions.includes(fileExt)) {
         try {
-            textContent = await officeParser.parseOfficeAsync(filePath);
+            textContent = (await officeParser.default.parseOffice(filePath)).toText();
             if (!textContent || textContent.trim().length === 0) {
                 textContent = "";
             }

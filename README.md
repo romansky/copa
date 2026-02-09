@@ -29,10 +29,10 @@ It helps you create complex, repeatable, and maintainable prompts for any code-r
 
 Use CoPa directly with `npx` (recommended) or install it globally.
 
-Process a template file and copy the result to your clipboard:
+Process a template file and output the result to stdout:
 
 ```sh
-npx copa t prompt.copa
+npx copa to prompt.copa
 ```
 
 See the [Commands](#commands) section for more options, like printing to stdout.
@@ -142,20 +142,11 @@ Note: When used in a fenced block (`{{{ ... }}}`), the processed result is wrapp
 
 ## Commands
 
-- `t, template <file>`: Process a template file and copy to clipboard
-    - Option: `-v, --verbose` (Display detailed file and token information)
-
 - `to <file>`: Process a template file and output to stdout
     - Options:
         - `-err, --errors` (Output only errors like missing files, empty string if none)
         - `-t, --tokens` (Output only the token count)
         - `-v, --verbose` (Display detailed file and token information to stderr)
-
-- `c, copy [directory]`: Copy files to clipboard (legacy mode)
-    - Options:
-        - `-ex, --exclude <extensions>` (Exclude file types)
-        - `-v, --verbose` (List copied files)
-        - `-f, --file <filePath>` (Copy a single file)
 
 ## Common Use Cases
 

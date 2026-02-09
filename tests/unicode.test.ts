@@ -1,12 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { describe, beforeEach, afterEach, expect, test } from 'vitest'
-
-
-const execAsync = promisify(exec);
+import {describe, beforeEach, afterEach, expect, test} from 'vitest'
 
 describe('Locale and encoding handling', () => {
     let testDir: string;
@@ -15,7 +10,7 @@ describe('Locale and encoding handling', () => {
     beforeEach(async () => {
         testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copa-locale-test-'));
         // Save original env
-        process.env = { ...originalEnv };
+        process.env = {...originalEnv};
     });
 
     afterEach(async () => {
@@ -34,9 +29,9 @@ describe('Locale and encoding handling', () => {
 
         // Test with different locale settings
         const localeTests = [
-            { LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' },
-            { LANG: 'en_US', LC_ALL: 'en_US' },
-            { LANG: 'C', LC_ALL: 'C' }
+            {LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'},
+            {LANG: 'en_US', LC_ALL: 'en_US'},
+            {LANG: 'C', LC_ALL: 'C'}
         ];
 
         for (const locale of localeTests) {
@@ -60,37 +55,4 @@ describe('Locale and encoding handling', () => {
         }
     });
 
-    test('preserves encoding through clipboard operations', async () => {
-        const testContent = 'FCN: F × X → {';
-        const fileName = 'test.txt';
-        await fs.writeFile(path.join(testDir, fileName), testContent, 'utf8');
-
-        // Run CLI with explicit UTF-8 environment
-        const cliPath = path.resolve(__dirname, '../src/copa.ts');
-        const env = {
-            ...process.env,
-            LANG: 'en_US.UTF-8',
-            LC_ALL: 'en_US.UTF-8'
-        };
-
-        const { stdout, stderr } = await execAsync(
-            `ts-node ${cliPath} copy ${path.join(testDir, fileName)}`,
-            { env }
-        );
-
-        console.log('CLI stdout:', stdout);
-        console.log('CLI stderr:', stderr);
-
-        // Read clipboard content
-        const clipboardy = await import('clipboardy');
-        const clipboardContent = await clipboardy.default.read();
-
-        console.log('Original:', testContent);
-        console.log('Clipboard:', clipboardContent);
-        console.log('Original hex:', Buffer.from(testContent).toString('hex'));
-        console.log('Clipboard hex:', Buffer.from(clipboardContent).toString('hex'));
-
-        // this fails when locale is not setup correctly
-        // expect(clipboardContent.trim()).toBe(testContent);
-    });
 });
