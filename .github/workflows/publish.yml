@@ -3,7 +3,11 @@ name: Publish to npm
 on:
   push:
     tags:
-      - 'v*.*.*'  # Triggers the workflow on version tags
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -26,13 +30,9 @@ jobs:
 
       - name: Install root project dependencies
         run: yarn install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Build root project
         run: yarn build
 
       - name: Publish root project to npm
-        run: yarn publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: yarn npm publish --access public
