@@ -2,6 +2,10 @@
   "name": "copa",
   "version": "1.7.7",
   "description": "CoPa: Prompt Engineering Templating Language and CLI Tool",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/romansky/copa.git"
+  },
   "type": "commonjs",
   "main": "./dist/copa.js",
   "bin": "./dist/copa.js",
