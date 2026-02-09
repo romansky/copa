@@ -54,6 +54,34 @@ describe('Prompt Processor', () => {
         expect(result.content).toContain('End.');
     });
 
+    test('cuts imported file content at // {{!COPA_IGNORE_BELOW}} marker', async () => {
+        const rustFile = path.join(testDir, 'snippet.rs');
+        await fs.writeFile(rustFile, `fn top() {}\n// {{!COPA_IGNORE_BELOW}}\nfn bottom() {}\n`);
+        const promptContent = 'Rust:\n{{@snippet.rs}}\nEnd.';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(result.content).toContain('===== snippet.rs =====\nfn top() {}\n\n');
+        expect(result.content).not.toContain('fn bottom() {}');
+        expect(result.content).toContain('End.');
+    });
+
+    test('cuts imported file content at \\\\ {{!COPA_IGNORE_BELOW}} marker', async () => {
+        const rustFile = path.join(testDir, 'snippet2.rs');
+        await fs.writeFile(rustFile, `fn top() {}\n\\\\ {{!COPA_IGNORE_BELOW}}\nfn bottom() {}\n`);
+        const promptContent = 'Rust:\n{{@snippet2.rs}}\nEnd.';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(result.content).toContain('===== snippet2.rs =====\nfn top() {}\n\n');
+        expect(result.content).not.toContain('fn bottom() {}');
+        expect(result.content).toContain('End.');
+    });
+
     test('processes a prompt file with folder reference', async () => {
         const promptContent = 'Folder contents:\n{{@subdir}}\nEnd of folder.';
         const promptFile = path.join(testDir, 'prompt.txt');

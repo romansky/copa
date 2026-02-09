@@ -6,3 +6,4 @@ version.sh
 prompts/*.req
 prompts/*.md
 prompts/*.thinking
+.DS_store

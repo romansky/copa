@@ -89,10 +89,42 @@ function countTokens(input: string): number {
 
 function removeImportsFromFile(content: string, filePath: string): string {
     const extension = path.extname(filePath).toLowerCase();
-    if (extension !== '.ts' && extension !== '.tsx') return content;
-    const importRegex = /^\s*import\s+(?:type\s+)?(?:[\w*{}\n\r\t, ]+)\s+from\s+["'].*?["'];?.*$/gm;
-    let modifiedContent = content.replace(importRegex, '').replace(/(\r?\n){3,}/g, '\n');
+    if (extension !== '.ts' && extension !== '.tsx' && extension !== '.rs') return content;
+
+    let modifiedContent = content;
+
+    if (extension === '.rs') {
+        const rustUseRegex = /^\s*(?:pub\s+)?use\b[\s\S]*?;\s*$/gm;
+        const rustExternCrateRegex = /^\s*extern\s+crate\s+[^;]+;\s*$/gm;
+        modifiedContent = modifiedContent.replace(rustUseRegex, '');
+        modifiedContent = modifiedContent.replace(rustExternCrateRegex, '');
+    } else {
+        const tsImportRegex = /^\s*import\s+(?:type\s+)?(?:[\w*{}\n\r\t, ]+)\s+from\s+["'].*?["'];?.*$/gm;
+        modifiedContent = modifiedContent.replace(tsImportRegex, '');
+    }
+
+    modifiedContent = modifiedContent.replace(/(\r?\n){3,}/g, '\n');
     return modifiedContent.trimStart();
+}
+
+function applyImportedFileIgnoreBelow(content: string): string {
+    const copaIgnoreBelowMarker = '{{!COPA_IGNORE_BELOW}}';
+    const markerPatterns = [
+        `// ${copaIgnoreBelowMarker}`,
+        `\\\\ ${copaIgnoreBelowMarker}`,
+        copaIgnoreBelowMarker
+    ];
+
+    let firstMarkerIndex = -1;
+    for (const markerPattern of markerPatterns) {
+        const markerIndex = content.indexOf(markerPattern);
+        if (markerIndex !== -1 && (firstMarkerIndex === -1 || markerIndex < firstMarkerIndex)) {
+            firstMarkerIndex = markerIndex;
+        }
+    }
+
+    if (firstMarkerIndex === -1) return content;
+    return content.substring(0, firstMarkerIndex);
 }
 
 function formatFileContent(relativePath: string, content: string, modIndicator: string = ''): string {
@@ -302,6 +334,7 @@ async function processNode(
 
                 for (const file of pathResult.files) {
                     let fileContent = file.content.normalize('NFC');
+                    fileContent = applyImportedFileIgnoreBelow(fileContent);
                     let modIndicator = '';
                     if (options.isRemoveImports) {
                         const originalContent = fileContent;

@@ -16,9 +16,9 @@ It helps you create complex, repeatable, and maintainable prompts for any code-r
 * Templated Prompts: Use `{{@path_or_url[:options]}}` syntax to embed content.
 * Auto-fenced Blocks: Wrap text or placeholders with `{{{ ... }}}` to automatically surround the result in a Markdown code fence. The fence uses 1 more backtick than the longest run inside, so you never have to count backticks again.
 * Web Content Fetching: Directly include content from URLs with `{{@https://...}}`.
-* Ignore Syntax: Use `{{! comment }}` for comments and `{{!IGNORE_BELOW}}` to exclude sections of your template.
+* Ignore Syntax: Use `{{! comment }}` for comments and `{{!IGNORE_BELOW}}` to exclude sections of your template. For imported files, use `// {{!COPA_IGNORE_BELOW}}` (or `\\ {{!COPA_IGNORE_BELOW}}`) to exclude everything below that marker.
 * Directory Trees: Display folder structures with the `:dir` option.
-* Code Cleaning: Strip `import`/`require` statements from JS/TS files with `:remove-imports`.
+* Code Cleaning: Strip import statements from TS/TSX/Rust files with `:remove-imports`.
 * Fine-grained Control: Use inline glob patterns to exclude specific files (e.g., `{{@src:-*.test.js}}`).
 * Nested Templates: Compose prompts from smaller parts using the `:eval` option.
 * Git-aware: Automatically respects your `.gitignore` file.
@@ -131,7 +131,7 @@ Format: `{{@resource:option1,option2}}`
 |-------------------|-------------------------------------------------------------------------------------------------------------|----------------------------------|
 | File/Web Options  |                                                                                                             |                                  |
 | `:clean`          | Includes the raw content of a file or URL without the `===== path =====` header.                            | `{{@src/main.js:clean}}`         |
-| `:remove-imports` | Removes `import` statements from TypeScript/JavaScript files to save tokens. Can be combined with `:clean`. | `{{@src/api.ts:remove-imports}}` |
+| `:remove-imports` | Removes import statements from TypeScript/TSX/Rust files to save tokens. Can be combined with `:clean`. | `{{@src/api.ts:remove-imports}}` |
 | Path Options      |                                                                                                             |                                  |
 | `:dir`            | Lists the directory structure as a tree instead of including file contents.                                 | `{{@src:dir}}`                   |
 | `:eval`           | Processes another template file and injects its output. Useful for reusing prompt components.               | `{{@./copa/sub-task.copa:eval}}` |

@@ -136,6 +136,23 @@ module.exports = { logStuff };
 This should not be affected by remove-imports.
 `; // Non-code files are not modified
 
+    const rustContentWithImports = `
+use std::collections::HashMap;
+pub use crate::models::User;
+extern crate serde_json;
+
+fn greet() {
+    println!("hi");
+}
+`;
+
+    const expected_rustContent_Cleaned = `
+
+fn greet() {
+    println!("hi");
+}
+`.trimStart();
+
     const onlyImportsContent = `import { a } from 'a';\nimport 'b';\nimport type { C } from 'c';`; // Original
 
     // Expected content after removing code and type imports from onlyImportsContent
@@ -156,6 +173,7 @@ This should not be affected by remove-imports.
         await fs.writeFile(path.join(srcDir, 'main.ts'), tsContentWithImports);
         await fs.writeFile(path.join(srcDir, 'components', 'component.tsx'), tsxContentWithImports);
         await fs.writeFile(path.join(srcDir, 'utils.js'), jsContentWithRequire);
+        await fs.writeFile(path.join(srcDir, 'main.rs'), rustContentWithImports);
         await fs.writeFile(path.join(testDir, 'docs.md'), mdContent);
         await fs.writeFile(path.join(srcDir, 'empty.ts'), ''); // Edge case: empty file
         await fs.writeFile(path.join(srcDir, 'only_imports.ts'), onlyImportsContent); // Edge case: only imports
@@ -255,6 +273,27 @@ This should not be affected by remove-imports.
         expect(result.totalTokens).toBe(countTokens(expectedOutput));
     });
 
+    test('should remove Rust imports from a single .rs file using :remove-imports', async () => {
+        const promptContent = `Analyze this Rust code:\n{{@src/main.rs:remove-imports}}`;
+        const promptFile = path.join(testDir, 'prompt.copa');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+        const normalizedResult = normalizePathsInData(result, testDir);
+
+        const expectedCleanedRustContent = expected_rustContent_Cleaned;
+        const expectedFileName = path.normalize('src/main.rs');
+        const expectedWrapper = `===== ${expectedFileName} (imports removed) =====`;
+        const expectedOutput = `Analyze this Rust code:\n${expectedWrapper}\n${expectedCleanedRustContent}\n\n`;
+
+        expect(result.content).toBe(expectedOutput);
+        expect(result.warnings).toEqual([]);
+        expect(normalizedResult.includedFiles).toEqual({
+            [`${path.normalize('src/main.rs')} (imports removed)`]: countTokens(`${expectedWrapper}\n${expectedCleanedRustContent}\n\n`)
+        });
+        expect(result.totalTokens).toBe(countTokens(expectedOutput));
+    });
+
     test('should remove code/type imports from .ts/.tsx files when importing a directory with :remove-imports', async () => {
         const promptContent = `Analyze the src directory:\n{{@src:remove-imports}}`;
         const promptFile = path.join(testDir, 'prompt.copa');
@@ -269,6 +308,7 @@ This should not be affected by remove-imports.
         const expectedJsContent = jsContentWithRequire; // Unchanged
         const expectedEmptyTsContent = ''; // Empty file remains empty
         const expectedCleanedOnlyImportsContent = expected_onlyImports_Cleaned; // Updated expectation
+        const expectedCleanedRustContent = expected_rustContent_Cleaned;
 
         // Note: Order might depend on glob/fs results, but content should be correct.
         // Check presence and absence of key parts.
@@ -292,6 +332,12 @@ This should not be affected by remove-imports.
         expect(result.content).toContain(`===== ${jsPath} =====\n${expectedJsContent}\n\n`); // No "(imports removed)"
         expect(result.content).toContain(`const fs = require('fs');`); // Imports remain
 
+        // Check Rust file
+        const rustPath = path.normalize('src/main.rs');
+        expect(result.content).toContain(`===== ${rustPath} (imports removed) =====\n${expectedCleanedRustContent}\n\n`);
+        expect(result.content).not.toContain(`use std::collections::HashMap;`);
+        expect(result.content).not.toContain(`extern crate serde_json;`);
+
         // Check empty TS file
         const emptyTsPath = path.normalize('src/empty.ts');
         // Empty file might or might not get '(imports removed)' depending on implementation, accept either
@@ -311,6 +357,7 @@ This should not be affected by remove-imports.
         expect(normalizedResult.includedFiles).toHaveProperty(`${path.normalize('src/main.ts')} (imports removed)`);
         expect(normalizedResult.includedFiles).toHaveProperty(`${path.normalize('src/components/component.tsx')} (imports removed)`);
         expect(normalizedResult.includedFiles).toHaveProperty(path.normalize('src/utils.js'));
+        expect(normalizedResult.includedFiles).toHaveProperty(`${path.normalize('src/main.rs')} (imports removed)`);
         expect(normalizedResult.includedFiles).toHaveProperty(`${path.normalize('src/only_imports.ts')} (imports removed)`);
         expect(normalizedResult.includedFiles).toHaveProperty(path.normalize('src/empty.ts')); // Or possibly with '(imports removed)'
     });
@@ -327,6 +374,7 @@ This should not be affected by remove-imports.
         const expectedCleanedTsContent = expected_tsContent_Cleaned;
         const expectedCleanedTsxContent = expected_tsxContent_Cleaned;
         const expectedJsContent = jsContentWithRequire; // Unchanged
+        const expectedCleanedRustContent = expected_rustContent_Cleaned;
         const expectedEmptyTsContent = '';
         const expectedCleanedOnlyImportsContent = expected_onlyImports_Cleaned;
 
@@ -345,6 +393,10 @@ This should not be affected by remove-imports.
         // JS checks
         expect(result.content).toContain(expectedJsContent);
         expect(result.content).toContain(`const fs = require('fs');`); // JS require should remain
+        // Rust checks
+        expect(result.content).toContain(expectedCleanedRustContent);
+        expect(result.content).not.toContain(`use std::collections::HashMap;`);
+        expect(result.content).not.toContain(`extern crate serde_json;`);
         // only_imports check
         expect(result.content).toContain(expectedCleanedOnlyImportsContent);
         expect(result.content).not.toContain(`import { a } from 'a';`);
@@ -352,6 +404,7 @@ This should not be affected by remove-imports.
         expect(normalizedResult.includedFiles).toHaveProperty(`${path.normalize('src/main.ts')} (clean (imports removed))`);
         expect(normalizedResult.includedFiles).toHaveProperty(`${path.normalize('src/components/component.tsx')} (clean (imports removed))`);
         expect(normalizedResult.includedFiles).toHaveProperty(`${path.normalize('src/utils.js')} (clean)`); // JS not modified
+        expect(normalizedResult.includedFiles).toHaveProperty(`${path.normalize('src/main.rs')} (clean (imports removed))`);
         expect(normalizedResult.includedFiles).toHaveProperty(`${path.normalize('src/only_imports.ts')} (clean (imports removed))`);
         // Empty file might or might not get '(imports removed)', accept either
         expect(Object.keys(normalizedResult.includedFiles)).toEqual(
