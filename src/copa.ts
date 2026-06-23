@@ -4,10 +4,10 @@ import {program} from 'commander';
 import {readGlobalConfig} from "./readGlobalConfig";
 
 import path from "path";
-import {processPromptFile} from "./promptProcessor";
 
 async function handleToCommand(file: string, options: { errors?: boolean, tokens?: boolean, verbose?: boolean }) {
     try {
+        const {processPromptFile} = await import("./promptProcessor");
         const globalExclude = await readGlobalConfig();
         const {
             content,

@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import {filterFiles} from "../src/filterFiles";
-import {describe, beforeEach, afterEach, expect, test} from 'vitest'
+import {describe, beforeEach, afterEach, expect, test, vi} from 'vitest'
 import {processPromptFile} from "../src/promptProcessor";
 import {exec as _exec} from 'child_process';
 import {promisify} from 'util';
@@ -11,10 +11,12 @@ const exec = promisify(_exec);
 
 describe('Prompt Processor', () => {
     let testDir: string;
+    let originalFetch: typeof global.fetch;
 
     const cleanPath = (path: string) => path.replace(testDir + '/', '');
 
     beforeEach(async () => {
+        originalFetch = global.fetch;
         testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copa-prompt-test-'));
         await fs.mkdir(path.join(testDir, 'subdir'));
         await fs.writeFile(path.join(testDir, 'file1.js'), 'console.log("Hello");');
@@ -23,6 +25,8 @@ describe('Prompt Processor', () => {
     });
 
     afterEach(async () => {
+        global.fetch = originalFetch;
+        vi.restoreAllMocks();
         await fs.rm(testDir, {recursive: true, force: true});
     });
 
@@ -52,6 +56,57 @@ describe('Prompt Processor', () => {
         expect(result.content).toContain('file2.md =====');
         expect(result.content).toContain('# Markdown');
         expect(result.content).toContain('End.');
+    });
+
+    test('converts a local HTML file to semantic Markdown using :md', async () => {
+        await fs.writeFile(path.join(testDir, 'page.html'), '<main><h1>Hello</h1><p>World</p></main>');
+        const promptContent = 'HTML as markdown:\n{{@page.html:md}}\nEnd.';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(result.content).toContain('HTML as markdown:\n<!-- <main> -->');
+        expect(result.content).toContain('# Hello');
+        expect(result.content).toContain('World');
+        expect(result.content).toContain('<!-- </main> -->');
+        expect(result.content).toContain('End.');
+        expect(result.includedFiles).toHaveProperty('page.html (markdown)');
+        expect(result.warnings).toEqual([]);
+    });
+
+    test('converts a URL to semantic Markdown using :md', async () => {
+        global.fetch = vi.fn(async () => new Response('<article><h1>Remote</h1><p>Page</p></article>', {
+            headers: {'content-type': 'text/html'}
+        }));
+        const promptContent = 'URL as markdown:\n{{@https://example.com/page.html:md}}\nEnd.';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(global.fetch).toHaveBeenCalledWith('https://example.com/page.html');
+        expect(result.content).toContain('URL as markdown:');
+        expect(result.content).toContain('# Remote');
+        expect(result.content).toContain('Page');
+        expect(result.content).toContain('End.');
+        expect(result.includedFiles).toHaveProperty('https://example.com/page.html (markdown)');
+        expect(result.warnings).toEqual([]);
+    });
+
+    test('supports :md in auto-fenced placeholders', async () => {
+        await fs.writeFile(path.join(testDir, 'page.html'), '<h1>Hello</h1>');
+        const promptContent = 'Fenced markdown:\n{{{@page.html:md}}}End.';
+        const promptFile = path.join(testDir, 'prompt.txt');
+        await fs.writeFile(promptFile, promptContent);
+
+        const result = await processPromptFile(promptFile);
+
+        expect(result.content).toContain('Fenced markdown:\n```');
+        expect(result.content).toContain('# Hello');
+        expect(result.content).toContain('```\n\nEnd.');
+        expect(result.includedFiles).toHaveProperty('fence:page.html (markdown)');
+        expect(result.warnings).toEqual([]);
     });
 
     test('cuts imported file content at // {{!COPA_IGNORE_BELOW}} marker', async () => {

@@ -12,6 +12,7 @@ interface PlaceholderOptions {
     type: PlaceholderType;
     isClean: boolean;
     isRemoveImports: boolean;
+    isMarkdown: boolean;
     ignorePatterns: string[];
     includePatterns: string[];
 }
@@ -131,8 +132,40 @@ function formatFileContent(relativePath: string, content: string, modIndicator: 
     return `===== ${path.normalize(relativePath)}${modIndicator} =====\n${content}\n\n`;
 }
 
+function isWebResource(resource: string): boolean {
+    return resource.startsWith('http://') || resource.startsWith('https://');
+}
 
-const KNOWN_OPTIONS = ['dir', 'eval', 'clean', 'remove-imports'];
+async function fetchHtmlResourceContent(resource: string, basePath: string): Promise<string> {
+    if (!isWebResource(resource)) {
+        return await fs.readFile(path.resolve(basePath, resource), 'utf-8');
+    }
+
+    const response = await fetch(resource);
+    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+
+    const contentType = response.headers.get('content-type');
+    if (contentType && !(contentType.includes('text/html') || contentType.includes('text/plain') || contentType.includes('application/xml'))) {
+        throw new Error(`Content from ${resource} is not HTML or plain text (type: ${contentType})`);
+    }
+
+    return await response.text();
+}
+
+async function convertHtmlResourceToMarkdown(resource: string, basePath: string): Promise<string> {
+    const html = await fetchHtmlResourceContent(resource, basePath);
+    const [{convertHtmlToMarkdown}, {JSDOM}] = await Promise.all([
+        import("dom-to-semantic-markdown"),
+        import("jsdom"),
+    ]);
+    const dom = new JSDOM();
+
+    return convertHtmlToMarkdown(html, {
+        overrideDOMParser: new dom.window.DOMParser(),
+    });
+}
+
+const KNOWN_OPTIONS = ['dir', 'eval', 'clean', 'remove-imports', 'md'];
 const PRIMARY_OPTIONS: PlaceholderType[] = ['dir', 'eval'];
 
 
@@ -148,11 +181,12 @@ function parsePlaceholder(placeholder: string, warnings: string[]): PlaceholderN
         optionsStr = inner.substring(lastColonIndex + 1);
     }
 
-    const isWebUrl = resource.startsWith('http://') || resource.startsWith('https://');
+    const isWebUrl = isWebResource(resource);
     const options: PlaceholderOptions = {
         type: isWebUrl ? 'web' : 'file',
         isClean: false,
         isRemoveImports: false,
+        isMarkdown: false,
         ignorePatterns: [],
         includePatterns: [],
     };
@@ -173,6 +207,8 @@ function parsePlaceholder(placeholder: string, warnings: string[]): PlaceholderN
                 options.isClean = true;
             } else if (opt === 'remove-imports') {
                 options.isRemoveImports = true;
+            } else if (opt === 'md') {
+                options.isMarkdown = true;
             }
         } else if (opt.startsWith('+')) {
             options.includePatterns.push(opt.slice(1));
@@ -183,12 +219,14 @@ function parsePlaceholder(placeholder: string, warnings: string[]): PlaceholderN
             const b = lev(opt, 'dir')
             const c = lev(opt, 'eval')
             const d = lev(opt, 'clean')
+            const e = lev(opt, 'md')
 
             const distances = {
                 'remove-imports': a,
                 'dir': b,
                 'eval': c,
-                'clean': d
+                'clean': d,
+                'md': e
             }
 
             const bestMatch = Object.entries(distances).reduce((a, b) => a[1] < b[1] ? a : b);
@@ -208,8 +246,10 @@ function parsePlaceholder(placeholder: string, warnings: string[]): PlaceholderN
     if (options.type === 'dir' || options.type === 'eval') {
         if (options.isClean) warnings.push(`Warning: ':clean' is ignored with ':${options.type}' in "${original}".`);
         if (options.isRemoveImports) warnings.push(`Warning: ':remove-imports' is ignored with ':${options.type}' in "${original}".`);
+        if (options.isMarkdown) warnings.push(`Warning: ':md' is ignored with ':${options.type}' in "${original}".`);
         options.isClean = false;
         options.isRemoveImports = false;
+        options.isMarkdown = false;
     }
 
     return {type: 'placeholder', original, resource, options};
@@ -295,6 +335,13 @@ async function processNode(
     try {
         switch (options.type) {
             case 'web': {
+                if (options.isMarkdown) {
+                    content = await convertHtmlResourceToMarkdown(resource, basePath);
+                    tokens = countTokens(content);
+                    includedFiles[`${resource} (markdown)`] = tokens;
+                    break;
+                }
+
                 const webContent = await fetchWebPageContent(resource);
                 content = options.isClean ? webContent : `===== ${resource} =====\n${webContent}\n\n`;
                 tokens = countTokens(content);
@@ -323,6 +370,13 @@ async function processNode(
                 break;
             }
             case 'file': {
+                if (options.isMarkdown) {
+                    content = await convertHtmlResourceToMarkdown(resource, basePath);
+                    tokens = countTokens(content);
+                    includedFiles[`${resource} (markdown)`] = tokens;
+                    break;
+                }
+
                 const absolutePath = path.resolve(basePath, resource);
                 const pathResult = await processPath(absolutePath, options.ignorePatterns, options.includePatterns, globalExclude, basePath);
                 warnings.push(...pathResult.warnings);

@@ -18,22 +18,25 @@
   "author": "Roman Landenband",
   "license": "MIT",
   "devDependencies": {
-    "@types/jsdom": "^27.0.0",
-    "@types/node": "^25.2.2",
+    "@types/jsdom": "^28.0.3",
+    "@types/node": "^26.0.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.0.18"
   },
   "dependencies": {
     "@dqbd/tiktoken": "^1.0.22",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
+    "dom-to-semantic-markdown": "^1.5.0",
     "glob": "^13.0.1",
+    "jsdom": "^29.1.1",
     "minimatch": "^10.1.2",
-    "officeparser": "^6.0.4",
-    "pdfjs-dist": "^5.4.624",
+    "officeparser": "^7.2.1",
+    "pdfjs-dist": "^6.0.227",
     "simple-git": "^3.30.0"
   },
   "files": [
     "dist/**/*"
-  ]
+  ],
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
